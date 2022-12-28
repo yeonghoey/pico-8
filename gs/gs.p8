@@ -22,7 +22,7 @@ function class(base)
 	local c={}
 	c.__index=c
 	c.super=base
-	c.new = function (self,...)
+	c.new=function(self,...)
 		local o={}
 		setmetatable(o,self)
 		o:init(...)
@@ -31,6 +31,51 @@ function class(base)
 
 	setmetatable(c,base)
 	return c
+end
+
+
+-- event
+event=class()
+
+function event:init()
+	self.listeners={}
+end
+
+function event:register(f)
+	add(self.listeners,f)
+end
+
+function event:unregister(f)
+	del(self.listeners,f)
+end
+
+function event:invoke(...)
+	for f in all(self.listeners) do
+		f(...)
+	end
+end
+
+
+-- helpers
+function bindall(c,prefix,o)
+	for k,v in pairs(c) do
+		if type(k)=="string" and
+			type(v)=="function" and
+			startswith(k,prefix) 		
+		then
+			o[k]=bind(v,o)
+		end
+	end
+end
+
+function bind(f,o)
+	return function (...)
+		return f(o,...)
+	end
+end
+
+function startswith(s,prefix)
+	return sub(s,1,#prefix)==prefix
 end
 
 function norm(x,y)
@@ -59,8 +104,11 @@ end
 gscene=class(scene)
 
 function gscene:init()
+	bindall(gscene,"on_",self)
+	
 	self.bullets={}
 	self.eships={}
+		
 	self:spawn_pship()
 	-- test
 	self:spawn_eship(eship1,10,10)
@@ -90,6 +138,8 @@ end
 
 function gscene:spawn_eship(estype,x,y)
 	local es=estype:new(self,x,y)
+	es.on_destroy:register(
+		self.on_destroy_es)
 	add(self.eships,es)
 end
 
@@ -118,18 +168,16 @@ function gscene:update_checkbullets()
 	for blt in all(self.bullets) do
 		for es in all(self.eships) do
 			if self:checkbullet(blt,es) then
-				self:on_hit(blt,es)
+				es:hit(blt.damage)
+				del(self.bullets,blt)
 			end
 		end
 	end
 end
 
-function gscene:on_hit(blt,es)
-	del(self.bullets,blt)
-	es:hit(blt)
-	if es:is_destroyed() then
-		del(self.eships,es)
-	end
+function gscene:on_destroy_es(es)
+	del(self.eships,es)
+	sfx(0)
 end
 
 function gscene:checkbullet(blt,es)
@@ -171,6 +219,7 @@ function ship:init(gscn,x,y)
 	self.hp=self.init_hp
 	self.x=x
 	self.y=y
+	self.on_destroy=event:new()
 	assert(self.col != nil)
 	assert(self.spd != nil)
 end
@@ -203,6 +252,12 @@ function ship:draw(gscn)
 	end
 end
 
+function ship:hit(damage)
+	self.hp-=damage
+	if self.hp <=0 then
+		self.on_destroy:invoke(self)
+	end
+end
 
 -- pship: player
 pship=class(ship)
@@ -244,14 +299,6 @@ end
 
 -- eship: enemy base
 eship=class(ship)
-
-function eship:hit(blt)
-	self.hp-=1
-end
-
-function eship:is_destroyed()
-	return self.hp<=0
-end
 
 -- eship1
 eship1=class(eship)
@@ -351,6 +398,7 @@ function barrel:fire(ps,gscn)
 	local x,y=self:aimp(ps,4)
 	local dx,dy=self:dir()
 	gscn:spawn_bullet(x,y,dx,dy)
+	sfx(1)
 end
 
 function barrel:next_ri(cw)
@@ -387,6 +435,7 @@ bullet=class()
 bullet.radius=1
 bullet.spd=2
 bullet.col=7
+bullet.damage=1
 
 function bullet:init(gscn,x,y,dx,dy)
 	self.x=x
@@ -414,3 +463,6 @@ __gfx__
 00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+__sfx__
+00020000320602e050230502f050250201d0302b0302b030380103c0203e0203e0303e05000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000500002441020420294402e450021001540016400184001a4001b4001d4001e4002040021400234002440000000000000000000000000000000000000000000000000000000000000000000000000000000000
