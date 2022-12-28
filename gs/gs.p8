@@ -73,8 +73,6 @@ function gscene:init()
 	self:spawn_es(eship1,100,10)
 	self:spawn_es(eship1,10,100)
 	self:spawn_es(eship1,100,100)
-	
-	self:spawn_blt(10,10,1,0)
 end
 
 function gscene:update()
@@ -120,19 +118,19 @@ tscene=class(scene)
 
 gobject=class()
 
-function gobject:spawn(scn,...)
+function gobject:spawn(gscn,...)
 	local go=self:new()
 	go:init(scn,...)
 	return go
 end
 
-function gobject:init(scn)
+function gobject:init(gscn)
 end
 
-function gobject:update(scn)
+function gobject:update(gscn)
 end
 
-function gobject:draw(scn)
+function gobject:draw(gscn)
 end
 
 -->8
@@ -141,7 +139,7 @@ end
 ship=class(gobject)
 ship.radius=2
 
-function ship:init(scn,x,y)
+function ship:init(gscn,x,y)
 	self.hp=self.init_hp
 	self.x=x
 	self.y=y
@@ -149,18 +147,18 @@ function ship:init(scn,x,y)
 	assert(self.spd != nil)
 end
 
-function ship:update(scn)
-	local dx,dy = self:input(scn)
+function ship:update(gscn)
+	local dx,dy = self:input(gscn)
 	local spd=self.spd
 	self.x+=dx*spd
 	self.y+=dy*spd
 end
 
-function ship:input(scn)
+function ship:input(gscn)
 	return 0,0
 end
 
-function ship:draw(scn)
+function ship:draw(gscn)
 	local hp=self.hp
 	local x=self.x
 	local y=self.y
@@ -184,21 +182,21 @@ pship.init_hp=2
 pship.col=7
 pship.spd=1
 
-function pship:init(scn,...)
-	self.super.init(self,scn,...)
+function pship:init(gscn,...)
+	self.super.init(self,gscn,...)
 
 	self.can=cannon:new()
 	self.can:init()
 end
 
-function pship:update(scn)
-	self.super.update(self,scn)
-	self.can:update()
+function pship:update(gscn)
+	self.super.update(self,gscn)
+	self.can:update(self,gscn)
 end
 
-function pship:draw(scn)
-	self.super.draw(self,scn)
-	self.can:draw(self.x,self.y)
+function pship:draw(gscn)
+	self.super.draw(self,gscn)
+	self.can:draw(self,gscn)
 end
 
 function pship:input()
@@ -227,11 +225,11 @@ eship1.init_hp=1
 eship1.col=8
 eship1.spd=0.2
 
-function eship1:input(scn)
+function eship1:input(gscn)
 	local x=self.x
 	local y=self.y
-	local px=scn.ps.x
-	local py=scn.ps.y	
+	local px=gscn.ps.x
+	local py=gscn.ps.y	
 	return norm(px-x, py-y)
 end
 -->8
@@ -241,21 +239,19 @@ cannon=class()
 
 function cannon:init()
 	self.barrels={}
+	self.cd_duration=30
+	self.cd=self.cd_duration
 	self:add_barrel()
 end
 
-function cannon:update()
-	if btnp(4) then
-		self:rotate(-1)
-	end
-	if btnp(5) then
-		self:rotate(1)
-	end
+function cannon:update(ps,gscn)
+	self:update_rotate()
+	self:update_fire(ps,gscn)
 end
 
-function cannon:draw(px,py)
+function cannon:draw(ps,gscn)
 	for b in all(self.barrels) do
-		b:draw(px,py)
+		b:draw(ps,gscn)
 	end
 end
 
@@ -269,6 +265,27 @@ function cannon:add_barrel()
 	end
 	b:init(ri)
 	add(self.barrels,b)
+end
+
+function cannon:update_rotate()
+	if btnp(4) then
+		self:rotate(-1)
+	end
+	if btnp(5) then
+		self:rotate(1)
+	end
+end
+
+function cannon:update_fire(ps,gscn)
+	self.cd-=1
+	if self.cd>0 then
+		return
+	end
+
+	self.cd=self.cd_duration
+	for b in all(self.barrels) do
+		b:fire(ps,gscn)
+	end
 end
 
 function cannon:rotate(cw)
@@ -296,6 +313,12 @@ function barrel:rotate(cw)
 	self.ri=self:next_ri(cw)
 end
 
+function barrel:fire(ps,gscn)
+	local x,y=self:aimp(ps,4)
+	local dx,dy=self:dir()
+	gscn:spawn_blt(x,y,dx,dy)
+end
+
 function barrel:next_ri(cw)
 	local ri=self.ri
 	local nri=ri+cw
@@ -305,38 +328,46 @@ function barrel:next_ri(cw)
 	return nri
 end
 
-function barrel:draw(px,py)
+function barrel:draw(ps,gscn)
+	local x0,y0=self:aimp(ps,3)
+	local x1,y1=self:aimp(ps,4)
+	local col=self.col
+	line(x0,y0,x1,y1,col)
+end
+
+function barrel:aimp(ps,k)
+	local px,py=ps.x,ps.y
+	local dx,dy=self:dir()
+	return px+dx*k,py+dy*k
+end
+
+function barrel:dir()
 	local ri=self.ri
 	local dir=self.dirs[ri]
-	local dx,dy=unpack(dir)
-	local col=self.col
-	line(
-		px+dx*3,py+dy*3,
-		px+dx*4,py+dy*4,
-		col)
+	return unpack(dir)
 end
 -->8
 -- bullet
 
 bullet=class(gobject)
 bullet.radius=1
-bullet.spd=1
+bullet.spd=2
 bullet.col=7
 
-function bullet:init(scn,x,y,dx,dy)
+function bullet:init(gscn,x,y,dx,dy)
 	self.x=x
 	self.y=y
 	self.dx=dx
 	self.dy=dy
 end
 
-function bullet:update(scn)
+function bullet:update(gscn)
 	local spd=self.spd
 	self.x+=self.dx*spd
 	self.y+=self.dy*spd
 end
 
-function bullet:draw(scn)
+function bullet:draw(gscn)
 	local x=self.x
 	local y=self.y
 	local col=self.col
