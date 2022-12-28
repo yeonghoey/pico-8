@@ -241,31 +241,80 @@ cannon=class()
 
 function cannon:init()
 	self.barrels={}
+	self:add_barrel()
 end
 
 function cannon:update()
 	if btnp(4) then
-		self:rotate(false)
+		self:rotate(-1)
 	end
-	
 	if btnp(5) then
-		self:rotate(true)
+		self:rotate(1)
 	end
 end
 
 function cannon:draw(px,py)
-	line(px,py+2,px,py+3,7)
+	for b in all(self.barrels) do
+		b:draw(px,py)
+	end
+end
+
+function cannon:add_barrel()
+	local b=barrel:new()
+	local ri=1
+	local n=#self.barrels
+	if n>0 then
+		local lb=self.barrels[n]
+		ri=lb:next_ri()
+	end
+	b:init(ri)
+	add(self.barrels,b)
 end
 
 function cannon:rotate(cw)
+	for b in all(self.barrels) do
+		b:rotate(cw)
+	end
 end
 
 
 -- barrel
 barrel=class()
-barrel.dirs={{0,-1},{1,0},{0,1},{-1,0}}
+barrel.col=7
+barrel.dirs={
+	{0,-1},
+	{1,0},
+	{0,1},
+	{-1,0}
+}
 
+function barrel:init(ri)
+	self.ri=ri
+end
 
+function barrel:rotate(cw)
+	self.ri=self:next_ri(cw)
+end
+
+function barrel:next_ri(cw)
+	local ri=self.ri
+	local nri=ri+cw
+	local n=#barrel.dirs
+	if (nri<1) nri=n
+	if (nri>n) nri=1
+	return nri
+end
+
+function barrel:draw(px,py)
+	local ri=self.ri
+	local dir=self.dirs[ri]
+	local dx,dy=unpack(dir)
+	local col=self.col
+	line(
+		px+dx*3,py+dy*3,
+		px+dx*4,py+dy*4,
+		col)
+end
 -->8
 -- bullet
 
