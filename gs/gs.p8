@@ -5,7 +5,7 @@ __lua__
 -- by yeonghoey
 
 function _init()
-	current_scene=gscene:make()
+	current_scene=gscene:new()
 end
 
 function _update()
@@ -22,9 +22,10 @@ function class(base)
 	local c={}
 	c.__index=c
 	c.super=base
-	c.new = function (self)
-		o={}
+	c.new = function (self,...)
+		local o={}
 		setmetatable(o,self)
+		o:init(...)
 		return o
 	end
 
@@ -45,12 +46,6 @@ end
 
 scene=class()
 
-function scene:make(...)
-	local scn=self:new()
-	scn:init(...)
-	return scn
-end
-
 function scene:init()
 end
 
@@ -66,7 +61,6 @@ gscene=class(scene)
 function gscene:init()
 	self.bullets={}
 	self.eships={}
-	
 	self:spawn_pship()
 	-- test
 	self:spawn_eship(eship1,10,10)
@@ -90,17 +84,17 @@ function gscene:draw()
 end
 
 function gscene:spawn_pship()
-	local ps=pship:spawn(self,64,64)
+	local ps=pship:new(self,64,64)
 	self.ps=ps
 end
 
 function gscene:spawn_eship(estype,x,y)
-	local es=estype:spawn(self,x,y)
+	local es=estype:new(self,x,y)
 	add(self.eships,es)
 end
 
 function gscene:spawn_bullet(x,y,dx,dy)
-	local blt=bullet:spawn(self,x,y,dx,dy)
+	local blt=bullet:new(self,x,y,dx,dy)
 	add(self.bullets,blt)
 end
 
@@ -168,28 +162,9 @@ end
 --tscene: title scene
 tscene=class(scene)
 -->8
--- gobject
-
-gobject=class()
-
-function gobject:spawn(gscn,...)
-	local go=self:new()
-	go:init(gscn,...)
-	return go
-end
-
-function gobject:init(gscn)
-end
-
-function gobject:update(gscn)
-end
-
-function gobject:draw(gscn)
-end
--->8
 -- ships
 
-ship=class(gobject)
+ship=class()
 ship.radius=2
 
 function ship:init(gscn,x,y)
@@ -237,19 +212,17 @@ pship.spd=1
 
 function pship:init(gscn,...)
 	self.super.init(self,gscn,...)
-
-	self.can=cannon:new()
-	self.can:init()
+	self.cannon=cannon:new()
 end
 
 function pship:update(gscn)
 	self.super.update(self,gscn)
-	self.can:update(self,gscn)
+	self.cannon:update(self,gscn)
 end
 
 function pship:draw(gscn)
 	self.super.draw(self,gscn)
-	self.can:draw(self,gscn)
+	self.cannon:draw(self,gscn)
 end
 
 function pship:input()
@@ -410,7 +383,7 @@ end
 -->8
 -- bullet
 
-bullet=class(gobject)
+bullet=class()
 bullet.radius=1
 bullet.spd=2
 bullet.col=7
