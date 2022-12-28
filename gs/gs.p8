@@ -21,6 +21,7 @@ end
 function class(base)
 	local c={}
 	c.__index=c
+	c.super=base
 	c.new = function (self)
 		o={}
 		setmetatable(o,self)
@@ -31,11 +32,12 @@ function class(base)
 	return c
 end
 
-function dir(v)
-	if abs(v)<1 then
-		return 0
+function norm(x,y)
+	if x==0 and y==0 then
+		return x,y
 	else
-		return sgn(v)
+		mag=sqrt(x*x+y*y)
+		return x/mag,y/mag
 	end
 end
 -->8
@@ -43,10 +45,10 @@ end
 
 scene=class()
 
-function scene:make()
-	local s=self:new()
-	s:init()
-	return s
+function scene:make(...)
+	local scn=self:new()
+	scn:init(...)
+	return scn
 end
 
 function scene:init()
@@ -58,26 +60,29 @@ end
 function scene:draw()
 end
 
---tscene: title scene
-tscene=class(scene)
-
-
 --gscene: game scene
 gscene=class(scene)
 
-
 function gscene:init()
-	self.ps=pship:spawn(self,64,64)
-	self.eships={}	
-
+	self.bullets={}
+	self.eships={}
+	
+	self:spawn_ps()
 	-- test
-	local es=eship1:spawn(self,10,10)
-	add(self.eships,es)
+	self:spawn_es(eship1,10,10)
+	self:spawn_es(eship1,100,10)
+	self:spawn_es(eship1,10,100)
+	self:spawn_es(eship1,100,100)
+	
+	self:spawn_blt(10,10,1,0)
 end
 
 function gscene:update()
 	for es in all(self.eships) do
 		es:update(self)
+	end
+	for blt in all(self.bullets) do
+		blt:update(self)
 	end
 	self.ps:update(self)
 end
@@ -87,26 +92,61 @@ function gscene:draw()
 	for es in all(self.eships) do
 		es:draw(self)
 	end
+	for blt in all(self.bullets) do
+		blt:draw(self)
+	end
 	self.ps:draw(self)
 end
+
+function gscene:spawn_ps()
+	local ps=pship:spawn(self,64,64)
+	self.ps=ps
+end
+
+function gscene:spawn_es(estype,x,y)
+	local es=estype:spawn(self,x,y)
+	add(self.eships,es)
+end
+
+function gscene:spawn_blt(x,y,dx,dy)
+	local blt=bullet:spawn(self,x,y,dx,dy)
+	add(self.bullets,blt)
+end
+
+--tscene: title scene
+tscene=class(scene)
+-->8
+-- gobject
+
+gobject=class()
+
+function gobject:spawn(scn,...)
+	local go=self:new()
+	go:init(scn,...)
+	return go
+end
+
+function gobject:init(scn)
+end
+
+function gobject:update(scn)
+end
+
+function gobject:draw(scn)
+end
+
 -->8
 -- ships
 
-ship=class()
+ship=class(gobject)
 ship.radius=2
 
-function ship:spawn(scn,x,y)
-	local s=self:new()
-	s.hp=self.init_hp
-	s.x=x
-	s.y=y
-	assert(s.col != nil)
-	assert(s.spd != nil)
-	s:init(scn)
-	return s
-end
-
-function ship:init(scn)
+function ship:init(scn,x,y)
+	self.hp=self.init_hp
+	self.x=x
+	self.y=y
+	assert(self.col != nil)
+	assert(self.spd != nil)
 end
 
 function ship:update(scn)
@@ -144,6 +184,23 @@ pship.init_hp=2
 pship.col=7
 pship.spd=1
 
+function pship:init(scn,...)
+	self.super.init(self,scn,...)
+
+	self.can=cannon:new()
+	self.can:init()
+end
+
+function pship:update(scn)
+	self.super.update(self,scn)
+	self.can:update()
+end
+
+function pship:draw(scn)
+	self.super.draw(self,scn)
+	self.can:draw(self.x,self.y)
+end
+
 function pship:input()
 	local dx=0
 	local dy=0
@@ -151,9 +208,15 @@ function pship:input()
 	if (btn(1)) dx+=1
 	if (btn(2)) dy-=1
 	if (btn(3)) dy+=1
+
+	if dx!=0 and dy!=0 then
+		-- digonal
+		dx*=0.707
+		dy*=0.707
+	end
+
 	return dx,dy
 end
-
 
 -- eship: enemy base
 eship=class(ship)
@@ -169,61 +232,67 @@ function eship1:input(scn)
 	local y=self.y
 	local px=scn.ps.x
 	local py=scn.ps.y	
-	return dir(px-x), dir(py-y)
+	return norm(px-x, py-y)
 end
 -->8
--- weapons
-
-weapon=class()
-
-function weapon:make(scn)
-	local w=self:new()
-	w:init(scn)
-	return w
-end
-
-function weapon:init(scn)
-end
-
-function weapon:update(scn)
-end
-
-function weapon:draw(scn)
-end
-
-
 -- cannon
-cannon=class(weapon)
 
-function cannon:init(scn)
+cannon=class()
+
+function cannon:init()
+	self.barrels={}
 end
 
-function cannon:update(scn)
+function cannon:update()
+	if btnp(4) then
+		self:rotate(false)
+	end
+	
+	if btnp(5) then
+		self:rotate(true)
+	end
 end
+
+function cannon:draw(px,py)
+	line(px,py+2,px,py+3,7)
+end
+
+function cannon:rotate(cw)
+end
+
+
+-- barrel
+barrel=class()
+barrel.dirs={{0,-1},{1,0},{0,1},{-1,0}}
+
+
 -->8
--- bullets
+-- bullet
 
-bullet=class()
+bullet=class(gobject)
+bullet.radius=1
+bullet.spd=1
+bullet.col=7
 
-function bullet:make(scn,x,y)
-	local b=self:new()
-	b:init(scn)
-	return b
-end
-
-function bullet:init(scn)
+function bullet:init(scn,x,y,dx,dy)
+	self.x=x
+	self.y=y
+	self.dx=dx
+	self.dy=dy
 end
 
 function bullet:update(scn)
+	local spd=self.spd
+	self.x+=self.dx*spd
+	self.y+=self.dy*spd
 end
 
 function bullet:draw(scn)
+	local x=self.x
+	local y=self.y
+	local col=self.col
+	pset(x,y,col)
 end
-
-
--- nbullet: normal bullet
-nbullet=class(bullet)
-
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
