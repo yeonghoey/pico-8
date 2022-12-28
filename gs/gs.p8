@@ -67,48 +67,102 @@ function gscene:init()
 	self.bullets={}
 	self.eships={}
 	
-	self:spawn_ps()
+	self:spawn_pship()
 	-- test
-	self:spawn_es(eship1,10,10)
-	self:spawn_es(eship1,100,10)
-	self:spawn_es(eship1,10,100)
-	self:spawn_es(eship1,100,100)
+	self:spawn_eship(eship1,10,10)
+	self:spawn_eship(eship1,100,10)
+	self:spawn_eship(eship1,10,100)
+	self:spawn_eship(eship1,100,100)
 end
 
 function gscene:update()
-	for es in all(self.eships) do
-		es:update(self)
-	end
-	for blt in all(self.bullets) do
-		blt:update(self)
-	end
-	self.ps:update(self)
+	self:update_checkbullets()
+	self:update_eships()
+	self:update_bullets()
+	self:update_pship()
 end
 
 function gscene:draw()
 	cls()
-	for es in all(self.eships) do
-		es:draw(self)
-	end
-	for blt in all(self.bullets) do
-		blt:draw(self)
-	end
-	self.ps:draw(self)
+	self:draw_eships()
+	self:draw_bullets()
+	self:draw_pship()
 end
 
-function gscene:spawn_ps()
+function gscene:spawn_pship()
 	local ps=pship:spawn(self,64,64)
 	self.ps=ps
 end
 
-function gscene:spawn_es(estype,x,y)
+function gscene:spawn_eship(estype,x,y)
 	local es=estype:spawn(self,x,y)
 	add(self.eships,es)
 end
 
-function gscene:spawn_blt(x,y,dx,dy)
+function gscene:spawn_bullet(x,y,dx,dy)
 	local blt=bullet:spawn(self,x,y,dx,dy)
 	add(self.bullets,blt)
+end
+
+function gscene:update_pship()
+	self.ps:update(self)
+end
+
+function gscene:update_eships()
+	for es in all(self.eships) do
+		es:update(self)
+	end
+end
+
+function gscene:update_bullets()
+	for blt in all(self.bullets) do
+		blt:update(self)
+	end
+end
+
+function gscene:update_checkbullets()
+	for blt in all(self.bullets) do
+		for es in all(self.eships) do
+			if self:checkbullet(blt,es) then
+				self:on_hit(blt,es)
+			end
+		end
+	end
+end
+
+function gscene:on_hit(blt,es)
+	del(self.bullets,blt)
+	es:hit(blt)
+	if es:is_destroyed() then
+		del(self.eships,es)
+	end
+end
+
+function gscene:checkbullet(blt,es)
+	local bx,by=blt.x,blt.y
+	local ex,ey=es.x,es.y
+	local er=es.radius
+	return
+		bx>=ex-er and
+		bx<=ex+er and
+		by>=ey-er and
+		by<=ey+er
+end
+
+function gscene:draw_pship()
+	self.ps:draw(self)
+end
+
+function gscene:draw_eships()
+	for es in all(self.eships) do
+		es:draw(self)
+	end
+end
+
+function gscene:draw_bullets()
+	for blt in all(self.bullets) do
+		blt:draw(self)
+	end
 end
 
 --tscene: title scene
@@ -120,7 +174,7 @@ gobject=class()
 
 function gobject:spawn(gscn,...)
 	local go=self:new()
-	go:init(scn,...)
+	go:init(gscn,...)
 	return go
 end
 
@@ -132,7 +186,6 @@ end
 
 function gobject:draw(gscn)
 end
-
 -->8
 -- ships
 
@@ -218,6 +271,14 @@ end
 
 -- eship: enemy base
 eship=class(ship)
+
+function eship:hit(blt)
+	self.hp-=1
+end
+
+function eship:is_destroyed()
+	return self.hp<=0
+end
 
 -- eship1
 eship1=class(eship)
@@ -316,7 +377,7 @@ end
 function barrel:fire(ps,gscn)
 	local x,y=self:aimp(ps,4)
 	local dx,dy=self:dir()
-	gscn:spawn_blt(x,y,dx,dy)
+	gscn:spawn_bullet(x,y,dx,dy)
 end
 
 function barrel:next_ri(cw)
