@@ -31,30 +31,30 @@ function new_fsm()
 	local entity_meta={
 		__index={
 			update=function(e)
-				local st=e.fsmst
+				local st=e.state
 				local to=states[st].trans(e)
 				if to!=nil then
 					states[st].exit(e)
 					states[to].enter(e)
-					e.fsmst=to
+					e.state=to
 				end
-				states[e.fsmst].update(e)
+				states[e.state].update(e)
 			end,
 			draw=function(e)
-				states[e.fsmst].draw(e)
+				states[e.state].draw(e)
 			end,
 		},
 	}
 	return {
 		add_state=function(s)
-			local fsmst=s.fsmst
-			assert(states[fsmst]==nil)
+			local state=s.state
+			assert(states[state]==nil)
 			setmetatable(s,state_meta)
-			states[fsmst]=s
+			states[state]=s
 		end,
 		new_entity=function(e)
 			setmetatable(e,entity_meta)
-			states[e.fsmst].enter(e)
+			states[e.state].enter(e)
 			return e
 		end
 	}
@@ -92,12 +92,12 @@ end
 -- scene
 function new_scene()
 	return fsm.new_entity{
-		fsmst="scene/title",
+		state="title",
 	}
 end
 
 fsm.add_state{
-	fsmst="scene/title",
+	state="title",
 
 	draw=function(e)
 		draw_title()
@@ -105,13 +105,13 @@ fsm.add_state{
 
 	trans=function(e)
 		if btnp(5) then
-			return "scene/main"
+			return "main"
 		end
 	end,
 }
 
 fsm.add_state{
-	fsmst="scene/main",
+	state="main",
 
 	enter=function(e)
 		e.game=new_game()
@@ -125,13 +125,13 @@ fsm.add_state{
 -- game
 function new_game()
 	return fsm.new_entity{
-		fsmst="game/playing",
+		state="game",
 		pship=new_pship(),
 	}
 end
 
 fsm.add_state{
-	fsmst="game/playing",
+	state="game",
 
 	update=function(e)
 		e.pship:update()
@@ -146,7 +146,7 @@ fsm.add_state{
 -- pship: player ship
 function new_pship()
 	return fsm.new_entity{
-		fsmst="pship/alive",
+		state="pship",
 		hp=2,
 		x=64,
 		y=64,
@@ -157,7 +157,7 @@ function new_pship()
 end
 
 fsm.add_state{
-	fsmst="pship/alive",
+	state="pship",
 
 	draw=function(e)
 		draw_ship(e)
