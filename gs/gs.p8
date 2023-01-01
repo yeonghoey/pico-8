@@ -106,8 +106,6 @@ end
 
 
 -->8
-
-
 -- classes
 scene=fsm{
 	init=function(s)
