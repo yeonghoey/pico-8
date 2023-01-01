@@ -1,82 +1,99 @@
 pico-8 cartridge // http://www.pico-8.com
 version 39
 __lua__
--- geometry survivor
--- by yeonghoey
+cls()
+
+root={}
 
 function _init()
-	current_scene=gscene:new()
+	root.scene=scene:new()
 end
 
 function _update()
-	current_scene:update()
+	root.scene:update()
 end
 
 function _draw()
-	current_scene:draw()
+	root.scene:draw()
 end
 -->8
 -- utils
-
-function class(base)
-	local c={}
-	c.__index=c
-	c.super=base
-	c.new=function(self,...)
-		local o={}
-		setmetatable(o,self)
-		o:init(...)
+class=(function()
+	local f
+	f=function(s,o)
+		o=o or {}
+		setmetatable(o,s)
+		s.__index=s
+		s.__call=f
 		return o
 	end
+	return f({},{
+		new=function(s,...)
+			local o=s()
+			o:init(...)
+			return o
+		end,
+	})
+end)()
 
-	setmetatable(c,base)
-	return c
-end
-
-
--- event
-event=class()
-
-function event:init()
-	self.listeners={}
-end
-
-function event:register(f)
-	add(self.listeners,f)
-end
-
-function event:unregister(f)
-	del(self.listeners,f)
-end
-
-function event:invoke(...)
-	for f in all(self.listeners) do
-		f(...)
-	end
-end
-
-
--- helpers
-function bindall(c,prefix,o)
-	for k,v in pairs(c) do
-		if type(k)=="string" and
-			type(v)=="function" and
-			startswith(k,prefix) 		
-		then
-			o[k]=bind(v,o)
+fsm=class{
+	init=function(s,start)
+		assert(s.state==nil)
+		s.state=start
+		s[s.state].enter(s)
+	end,
+	update=function(s)
+		s[s.state].update(s)
+		local st=s.state
+		local to=s[st].trans(s)
+		if to!=nil then
+			s[st].exit(s)
+			s[to].enter(s)
+			s.state=to
 		end
-	end
-end
+	end,
+	draw=function(s)
+		s[s.state].draw(s)
+	end,
+}
 
-function bind(f,o)
-	return function (...)
-		return f(o,...)
-	end
-end
+noop=function()end
 
-function startswith(s,prefix)
-	return sub(s,1,#prefix)==prefix
-end
+state=class{
+	enter=noop,
+	update=noop,
+	draw=noop,
+	exit=noop,
+	trans=noop,
+}
+
+event=class{
+	init=function(s)
+		s.ls={}
+	end,
+	add=function(s,f)
+		add(s.ls,f)
+	end,
+	del=function(s,f)
+		del(s.ls,f)
+	end,
+	invoke=function(s,...)
+		for f in all(s.ls) do
+			f(...)
+		end
+	end,
+}
+
+-- self func:foreach helper
+sf={}
+setmetatable(sf,{
+	__index=function(t,key)
+		t[key]=function(s)
+			return s[key](s)
+		end
+		return t[key]
+	end
+})
 
 function norm(x,y)
 	if x==0 and y==0 then
@@ -86,376 +103,467 @@ function norm(x,y)
 		return x/mag,y/mag
 	end
 end
+
+
 -->8
--- scenes
-
-scene=class()
-
-function scene:init()
-end
-
-function scene:update()
-end
-
-function scene:draw()
-end
-
---gscene: game scene
-gscene=class(scene)
-
-function gscene:init()
-	bindall(gscene,"on_",self)
-	
-	self.bullets={}
-	self.eships={}
-		
-	self:spawn_pship()
-	-- test
-	self:spawn_eship(eship1,10,10)
-	self:spawn_eship(eship1,100,10)
-	self:spawn_eship(eship1,10,100)
-	self:spawn_eship(eship1,100,100)
-end
-
-function gscene:update()
-	self:update_checkbullets()
-	self:update_eships()
-	self:update_bullets()
-	self:update_pship()
-end
-
-function gscene:draw()
-	cls()
-	self:draw_eships()
-	self:draw_bullets()
-	self:draw_pship()
-end
-
-function gscene:spawn_pship()
-	local ps=pship:new(self,64,64)
-	self.ps=ps
-end
-
-function gscene:spawn_eship(estype,x,y)
-	local es=estype:new(self,x,y)
-	es.on_destroy:register(
-		self.on_destroy_es)
-	add(self.eships,es)
-end
-
-function gscene:spawn_bullet(x,y,dx,dy)
-	local blt=bullet:new(self,x,y,dx,dy)
-	add(self.bullets,blt)
-end
-
-function gscene:update_pship()
-	self.ps:update(self)
-end
-
-function gscene:update_eships()
-	for es in all(self.eships) do
-		es:update(self)
-	end
-end
-
-function gscene:update_bullets()
-	for blt in all(self.bullets) do
-		blt:update(self)
-	end
-end
-
-function gscene:update_checkbullets()
-	for blt in all(self.bullets) do
-		for es in all(self.eships) do
-			if self:checkbullet(blt,es) then
-				es:hit(blt.damage)
-				del(self.bullets,blt)
-			end
-		end
-	end
-end
-
-function gscene:on_destroy_es(es)
-	del(self.eships,es)
-	sfx(0)
-end
-
-function gscene:checkbullet(blt,es)
-	local bx,by=blt.x,blt.y
-	local ex,ey=es.x,es.y
-	local er=es.radius
-	return
-		bx>=ex-er and
-		bx<=ex+er and
-		by>=ey-er and
-		by<=ey+er
-end
-
-function gscene:draw_pship()
-	self.ps:draw(self)
-end
-
-function gscene:draw_eships()
-	for es in all(self.eships) do
-		es:draw(self)
-	end
-end
-
-function gscene:draw_bullets()
-	for blt in all(self.bullets) do
-		blt:draw(self)
-	end
-end
-
---tscene: title scene
-tscene=class(scene)
--->8
--- ships
-
-ship=class()
-ship.radius=2
-
-function ship:init(gscn,x,y)
-	self.hp=self.init_hp
-	self.x=x
-	self.y=y
-	self.on_destroy=event:new()
-	assert(self.col != nil)
-	assert(self.spd != nil)
-end
-
-function ship:update(gscn)
-	local dx,dy = self:input(gscn)
-	local spd=self.spd
-	self.x+=dx*spd
-	self.y+=dy*spd
-end
-
-function ship:input(gscn)
-	return 0,0
-end
-
-function ship:draw(gscn)
-	local hp=self.hp
-	local x=self.x
-	local y=self.y
-	local r=self.radius
-	local col=self.col
-	
-	if hp > 2 then
-		circfill(x,y,r,col)
-	elseif hp == 2 then
-		pset(x,y,col)
-		circ(x,y,r,col)
-	elseif hp == 1 then
-		circ(x,y,r,col)
-	end
-end
-
-function ship:hit(damage)
-	self.hp-=damage
-	if self.hp <=0 then
-		self.on_destroy:invoke(self)
-	end
-end
-
--- pship: player
-pship=class(ship)
-pship.init_hp=2
-pship.col=7
-pship.spd=1
-
-function pship:init(gscn,...)
-	self.super.init(self,gscn,...)
-	self.cannon=cannon:new()
-end
-
-function pship:update(gscn)
-	self.super.update(self,gscn)
-	self.cannon:update(self,gscn)
-end
-
-function pship:draw(gscn)
-	self.super.draw(self,gscn)
-	self.cannon:draw(self,gscn)
-end
-
-function pship:input()
-	local dx=0
-	local dy=0
-	if (btn(0)) dx-=1
-	if (btn(1)) dx+=1
-	if (btn(2)) dy-=1
-	if (btn(3)) dy+=1
-
-	if dx!=0 and dy!=0 then
-		-- digonal
-		dx*=0.707
-		dy*=0.707
-	end
-
-	return dx,dy
-end
-
--- eship: enemy base
-eship=class(ship)
-
--- eship1
-eship1=class(eship)
-eship1.init_hp=1
-eship1.col=8
-eship1.spd=0.2
-
-function eship1:input(gscn)
-	local x=self.x
-	local y=self.y
-	local px=gscn.ps.x
-	local py=gscn.ps.y	
-	return norm(px-x, py-y)
-end
--->8
--- cannon
-
-cannon=class()
-
-function cannon:init()
-	self.barrels={}
-	self.cd_duration=30
-	self.cd=self.cd_duration
-	self:add_barrel()
-end
-
-function cannon:update(ps,gscn)
-	self:update_rotate()
-	self:update_fire(ps,gscn)
-end
-
-function cannon:draw(ps,gscn)
-	for b in all(self.barrels) do
-		b:draw(ps,gscn)
-	end
-end
-
-function cannon:add_barrel()
-	local b=barrel:new()
-	local ri=1
-	local n=#self.barrels
-	if n>0 then
-		local lb=self.barrels[n]
-		ri=lb:next_ri()
-	end
-	b:init(ri)
-	add(self.barrels,b)
-end
-
-function cannon:update_rotate()
-	if btnp(4) then
-		self:rotate(-1)
-	end
-	if btnp(5) then
-		self:rotate(1)
-	end
-end
-
-function cannon:update_fire(ps,gscn)
-	self.cd-=1
-	if self.cd>0 then
-		return
-	end
-
-	self.cd=self.cd_duration
-	for b in all(self.barrels) do
-		b:fire(ps,gscn)
-	end
-end
-
-function cannon:rotate(cw)
-	for b in all(self.barrels) do
-		b:rotate(cw)
-	end
-end
 
 
--- barrel
-barrel=class()
-barrel.col=7
-barrel.dirs={
-	{0,-1},
-	{1,0},
-	{0,1},
-	{-1,0}
+-- classes
+scene=fsm{
+	init=function(s)
+		fsm.init(s,"title")
+	end,
+
+	["title"]=state{
+		draw=function(s)
+			cls()
+			print("press ❎ to start")
+		end,
+		trans=function(s)
+			if(btnp(5)) return "main"
+		end,
+	},
+
+	["main"]=state{
+		enter=function(s)
+			s.game=game:new()
+		end,
+		update=function(s)
+			s.game:update()
+		end,
+		draw=function(s)
+			cls()
+			s.game:draw()
+		end,
+	}
 }
 
-function barrel:init(ri)
-	self.ri=ri
-end
+game=fsm{
+	init=function(s)
+		s.eships={}
+		s.bullets={}
 
-function barrel:rotate(cw)
-	self.ri=self:next_ri(cw)
-end
+		s.on_hit_pship=
+			function(p)
+				sfx(3)
+			end
+			
+		s.on_destroy_pship=
+			function(p)
+				--todo
+			end
 
-function barrel:fire(ps,gscn)
-	local x,y=self:aimp(ps,4)
-	local dx,dy=self:dir()
-	gscn:spawn_bullet(x,y,dx,dy)
-	sfx(1)
-end
+		s.on_destroy_eship=
+			function(e)
+				del(s.eships,e)
+				sfx(0)
+			end,
 
-function barrel:next_ri(cw)
-	local ri=self.ri
-	local nri=ri+cw
-	local n=#barrel.dirs
-	if (nri<1) nri=n
-	if (nri>n) nri=1
-	return nri
-end
+		s:spawn_area()
+		s:spawn_pship(64,64)
+		-- test
+		s:spawn_eship(eship1,10,10)
+		s:spawn_eship(eship1,100,10)
+		s:spawn_eship(eship1,10,100)
+		s:spawn_eship(eship1,100,100)
+		fsm.init(s,"play")
+	end,
+	
+	spawn_area=function(s)
+		s.area=area:new()
+	end,
+	
+	spawn_pship=function(s,x,y)
+		local p=pship:new{
+			game=s,x=x,y=y
+		}
+		p.on_hit:add(
+			s.on_hit_pship)
+		s.pship=p		
+	end,
+	
+	spawn_eship=function(
+			s,eshipt,x,y)
+		local e=eshipt:new{
+			game=s,x=x,y=y,
+		}
+		e.on_destroy:add(
+			s.on_destroy_eship)
+		add(s.eships,e)
+	end,
+	
+	spawn_bullet=function(
+			s,x,y,dx,dy)
+		add(s.bullets,bullet:new{
+			x=x,y=y,dx=dx,dy=dy,
+		})
+	end,
+	
+	check_bullets=function(s)
+		for b in all(s.bullets) do
+			if s.area:out(b.x,b.y) then
+				del(s.bullets,b)
+			else
+				for e in all(s.eships) do
+					if s:collide(b,e) then
+						e:hit(b.damage)
+						del(s.bullets,b)
+					end
+				end		
+			end
+		end
+	end,
 
-function barrel:draw(ps,gscn)
-	local x0,y0=self:aimp(ps,3)
-	local x1,y1=self:aimp(ps,4)
-	local col=self.col
-	line(x0,y0,x1,y1,col)
-end
+	check_eships=function(s)
+		local p=s.pship
+		for e in all(s.eships) do
+			if s:collide(p,e) then
+				printh("♥")
+				p:hit(1)
+				e:hit(1)
+			end
+		end
+	end,
 
-function barrel:aimp(ps,k)
-	local px,py=ps.x,ps.y
-	local dx,dy=self:dir()
-	return px+dx*k,py+dy*k
-end
+	collide=function(s,a,b)
+		local ax,ay=a.x,a.y
+		local bx,by=b.x,b.y
+		local ar=a.rad or 0
+		local br=b.rad or 0
+		return
+			abs(ax-bx)<=ar+br and
+			abs(ay-by)<=ar+br
+	end,
+	
+	["play"]=state{
+		update=function(s)
+			s:check_bullets()
+			s:check_eships()
+			foreach(s.eships,sf.update)
+			foreach(s.bullets,sf.update)
+			s.area:update()
+			s.pship:update()
+		end,
+		draw=function(s)
+			foreach(s.eships,sf.draw)
+			foreach(s.bullets,sf.draw)
+			s.area:draw()
+			s.pship:draw()
+		end,
+	}
+}
 
-function barrel:dir()
-	local ri=self.ri
-	local dir=self.dirs[ri]
-	return unpack(dir)
-end
--->8
--- bullet
+area=fsm{
+	thickness=3,
+	col=5,
 
-bullet=class()
-bullet.radius=1
-bullet.spd=2
-bullet.col=7
-bullet.damage=1
+	init=function(s)
+		s.x0=0
+		s.y0=0
+		s.x1=127
+		s.y1=127
+		fsm.init(s,"main")
+	end,
+	
+	out=function(s,x,y,os)
+		local os=os or 0
+		os+=s.thickness
+		return 
+			x<s.x0+os or
+			x>s.x1-os or
+			y<s.y0+os or
+			y>s.y1-os 
+	end,
 
-function bullet:init(gscn,x,y,dx,dy)
-	self.x=x
-	self.y=y
-	self.dx=dx
-	self.dy=dy
-end
+	["main"]=state{
+		draw=function(s)
+			for i=1,s.thickness do
+				if i%2==1 then
+					rect(
+						s.x0+i-1,s.y0+i-1,
+						s.x1-i+1,s.y1-i+1,
+						s.col)
+				end
+			end
+		end,
+	}
+}
 
-function bullet:update(gscn)
-	local spd=self.spd
-	self.x+=self.dx*spd
-	self.y+=self.dy*spd
-end
+ship=fsm{
+	init_hp=1,
+	rad=2,
+	col=0,
+	spd=0,
+	bump=3,
+	
+	init=function(s,arg)
+		s.game=arg.game
+		s.hp=s.init_hp
+		s.x=arg.x
+		s.y=arg.y
+		s.on_hit=event:new()
+		s.on_destroy=event:new()
+		fsm.init(s,arg.start)
+	end,
+	
+	hit=function(s)
+		s.hp-=1
+		s.on_hit:invoke(s)
+		if s.hp<=0 then
+			s.on_destroy:invoke(s)
+		end
+	end,
 
-function bullet:draw(gscn)
-	local x=self.x
-	local y=self.y
-	local col=self.col
-	pset(x,y,col)
-end
+	move=function(s)
+		local dx,dy=s:move_input()
+		local nx=s.x+dx*s.spd
+		local ny=s.y+dy*s.spd
+		local area=s.game.area
+		if area:out(nx,ny,s.rad) then
+			s.x-=dx*s.bump
+			s.y-=dy*s.bump
+			sfx(2)
+		else
+			s.x,s.y=nx,ny
+		end
+	end,
+
+	render=function(s)
+		local hp=s.hp
+		local x=s.x
+		local y=s.y
+		local r=s.rad
+		local col=s.col	
+		if hp > 2 then
+			circfill(x,y,r,col)
+		elseif hp == 2 then
+			pset(x,y,col)
+			circ(x,y,r,col)
+		elseif hp == 1 then
+			circ(x,y,r,col)
+		end
+	end,
+}
+
+pship=ship{
+	init_hp=2,
+	col=7,
+	spd=1,
+	
+	init=function(s,arg)
+		arg.start="alive"
+		ship.init(s,arg)
+		s.cannon=cannon:new{
+			game=arg.game,
+			pship=s,
+			cooldown=30,
+		}
+	end,
+
+	move_input=function(s)
+		local dx=0
+		local dy=0
+		if (btn(0)) dx-=1
+		if (btn(1)) dx+=1
+		if (btn(2)) dy-=1
+		if (btn(3)) dy+=1
+		if dx!=0 and dy!=0 then
+			dx*=0.707
+			dy*=0.707
+		end
+		return dx,dy
+	end,
+
+	["alive"]=state{
+		update=function(s)
+			s:move()
+			s.cannon:update()
+		end,
+		draw=function(s)
+			s:render()
+			s.cannon:draw()
+		end,
+	}
+}
+
+cannon=fsm{
+	init=function(s,arg)
+		s.game=arg.game
+		s.pship=arg.pship
+		s.cooldown=arg.cooldown
+		s.barrels={}
+		s:add_barrel()
+		fsm.init(s,"active")
+	end,
+	
+	add_barrel=function(s)
+		local di=1
+		local n=#s.barrels
+		if n>0 then
+			local lb=s.barrels[n]
+			di=lb:nextdi()
+		end
+		local b=barrel:new{
+			game=s.game,
+			pship=s.pship,
+			di=di
+		}
+		add(s.barrels,b)
+	end,
+	
+	update_rotate=function(s)
+		if(btnp(4)) s:rotate(-1)
+		if(btnp(5)) s:rotate(1)
+	end,
+	
+	rotate=function(s,cw)
+		for b in all(s.barrels) do
+			b:rotate(cw)
+		end
+	end,
+
+	update_fire=function(s)
+		s.cooldown_t-=1
+		if s.cooldown_t>0 then
+			return
+		end
+		s.cooldown_t=s.cooldown
+		foreach(s.barrels,sf.fire)
+	end,
+	
+	["active"]=state{
+		enter=function(s)
+			s.cooldown_t=s.cooldown
+		end,
+		update=function(s)
+			s:update_rotate()
+			s:update_fire()
+		end,
+		draw=function(s)
+			foreach(s.barrels,sf.draw)
+		end,
+	}
+}
+
+barrel=fsm{
+	dirs={ -- n/e/s/w
+		{0,-1},{1,0},{0,1},{-1,0},
+	},
+	col=7,
+
+	init=function(s,arg)
+		s.game=arg.game
+		s.pship=arg.pship
+		s.di=arg.di
+		fsm.init(s,"active")
+	end,
+	
+	nextdi=function(s,cw)
+		local n=#barrel.dirs
+		local ndi=s.di+cw
+		if (ndi<1) ndi=n
+		if (ndi>n) ndi=1
+		return ndi
+	end,
+	
+	dirpos=function(s,k)
+		local px=s.pship.x
+		local py=s.pship.y
+		local dx,dy=s:dir()
+		return px+dx*k,py+dy*k
+	end,
+	
+	dir=function(s)
+		return unpack(s.dirs[s.di])
+	end,
+	
+	rotate=function(s,cw)
+		s.di=s:nextdi(cw)
+	end,
+	
+	fire=function(s)
+		local x,y=s:dirpos(4)
+		local dx,dy=s:dir()
+		s.game:spawn_bullet(
+			x,y,dx,dy)
+		sfx(1)
+	end,
+	
+	["active"]=state{
+		draw=function(s,di)
+			local x0,y0=s:dirpos(3)
+			local x1,y1=s:dirpos(4)
+			local col=s.col
+			line(x0,y0,x1,y1,col)
+		end,
+	}
+}
+
+bullet=fsm{
+	rad=1,
+	spd=2,
+	col=7,
+	damage=1,
+	
+	init=function(s,arg)
+		s.x=arg.x
+		s.y=arg.y
+		s.dx=arg.dx
+		s.dy=arg.dy
+		fsm.init(s,"moving")
+	end,
+	
+	move=function(s)
+		s.x+=s.dx*s.spd
+		s.y+=s.dy*s.spd
+	end,
+	
+	render=function(s)
+		local x=s.x
+		local y=s.y
+		local col=s.col
+		pset(x,y,col)
+	end,
+	
+	["moving"]=state{
+		update=function(s)
+			s:move()
+		end,
+		draw=function(s)
+			s:render()
+		end,
+	}
+}
+
+eship1=ship{
+	init_hp=1,
+	col=8,
+	spd=0.2,
+
+	init=function(s,arg)
+		arg.start="alive"
+		ship.init(s, arg)
+	end,
+
+	move_input=function(s)
+		local x=s.x
+		local y=s.y
+		local px=s.game.pship.x
+		local py=s.game.pship.y
+		return norm(px-x,py-y)
+	end,
+
+	["alive"]=state{
+		update=function(s)
+			s:move()
+		end,
+		draw=function(s)
+			s:render()
+		end,
+	}
+}
+
+
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -464,5 +572,7 @@ __gfx__
 00077000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00700700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __sfx__
-00020000320602e050230502f050250201d0302b0302b030380103c0203e0203e0303e05000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-000500002441020420294402e450021001540016400184001a4001b4001d4001e4002040021400234002440000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000100003605028050270502c0503205035050360502f0502d0502c0503c0502b0500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+00010000230500000034050370503a0503c0503f0503f050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+000100003b0503705028050290501f0501c0501a0501905020050270502a0503300035000380003b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0001000000000340503a05017650236501665018650236502d6503305000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
