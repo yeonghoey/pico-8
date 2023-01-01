@@ -399,7 +399,7 @@ cannon=fsm{
 		local n=#s.barrels
 		if n>0 then
 			local lb=s.barrels[n]
-			di=lb:nextdi()
+			di=lb:nextdi(1)
 		end
 		local b=barrel:new{
 			game=s.game,
