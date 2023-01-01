@@ -3,22 +3,20 @@ version 39
 __lua__
 cls()
 
-root={}
-
 function _init()
-	root.scene=scene:new()
+	spawn_scene()
 end
 
 function _update()
-	root.scene:update()
+	scene:update()
 end
 
 function _draw()
-	root.scene:draw()
+	scene:draw()
 end
 -->8
--- utils
-class=(function()
+-- core
+tclass=(function()
 	local f
 	f=function(s,o)
 		o=o or {}
@@ -36,7 +34,7 @@ class=(function()
 	})
 end)()
 
-fsm=class{
+tfsm=tclass{
 	init=function(s,start)
 		assert(s.state==nil)
 		s.state=start
@@ -59,7 +57,7 @@ fsm=class{
 
 noop=function()end
 
-state=class{
+tstate=tclass{
 	enter=noop,
 	update=noop,
 	draw=noop,
@@ -67,7 +65,7 @@ state=class{
 	trans=noop,
 }
 
-event=class{
+tevent=tclass{
 	init=function(s)
 		s.ls={}
 	end,
@@ -106,13 +104,13 @@ end
 
 
 -->8
--- classes
-scene=fsm{
+-- types
+tscene=tfsm{
 	init=function(s)
-		fsm.init(s,"title")
+		tfsm.init(s,"title")
 	end,
 
-	["title"]=state{
+	["title"]=tstate{
 		draw=function(s)
 			cls()
 			print("press ❎ to start")
@@ -121,146 +119,62 @@ scene=fsm{
 			if(btnp(5)) return "main"
 		end,
 	},
-
-	["main"]=state{
+	["main"]=tstate{
 		enter=function(s)
-			s.game=game:new()
+			spawn_game()
 		end,
 		update=function(s)
-			s.game:update()
+			game:update()
 		end,
 		draw=function(s)
 			cls()
-			s.game:draw()
+			game:draw()
 		end,
 	}
 }
 
-game=fsm{
+
+tgame=tfsm{
 	init=function(s)
-		s.eships={}
-		s.bullets={}
-
-		s.on_hit_pship=
-			function(p)
-				sfx(3)
-			end
-			
-		s.on_destroy_pship=
-			function(p)
-				--todo
-			end
-
-		s.on_destroy_eship=
-			function(e)
-				del(s.eships,e)
-				sfx(0)
-			end,
-
-		s:spawn_area()
-		s:spawn_pship(64,64)
+		spawn_area()
+		spawn_pship(64,64)
 		-- test
-		s:spawn_eship(eship1,10,10)
-		s:spawn_eship(eship1,100,10)
-		s:spawn_eship(eship1,10,100)
-		s:spawn_eship(eship1,100,100)
-		fsm.init(s,"play")
-	end,
-	
-	spawn_area=function(s)
-		s.area=area:new()
-	end,
-	
-	spawn_pship=function(s,x,y)
-		local p=pship:new{
-			game=s,x=x,y=y
-		}
-		p.on_hit:add(
-			s.on_hit_pship)
-		s.pship=p		
-	end,
-	
-	spawn_eship=function(
-			s,eshipt,x,y)
-		local e=eshipt:new{
-			game=s,x=x,y=y,
-		}
-		e.on_destroy:add(
-			s.on_destroy_eship)
-		add(s.eships,e)
-	end,
-	
-	spawn_bullet=function(
-			s,x,y,dx,dy)
-		add(s.bullets,bullet:new{
-			x=x,y=y,dx=dx,dy=dy,
-		})
-	end,
-	
-	check_bullets=function(s)
-		for b in all(s.bullets) do
-			if s.area:out(b.x,b.y) then
-				del(s.bullets,b)
-			else
-				for e in all(s.eships) do
-					if s:collide(b,e) then
-						e:hit(b.damage)
-						del(s.bullets,b)
-					end
-				end		
-			end
-		end
+		spawn_eship(teship1,10,10)
+		spawn_eship(teship1,100,10)
+		spawn_eship(teship1,10,100)
+		spawn_eship(teship1,100,100)
+		tfsm.init(s,"play")
 	end,
 
-	check_eships=function(s)
-		local p=s.pship
-		for e in all(s.eships) do
-			if s:collide(p,e) then
-				printh("♥")
-				p:hit(1)
-				e:hit(1)
-			end
-		end
-	end,
-
-	collide=function(s,a,b)
-		local ax,ay=a.x,a.y
-		local bx,by=b.x,b.y
-		local ar=a.rad or 0
-		local br=b.rad or 0
-		return
-			abs(ax-bx)<=ar+br and
-			abs(ay-by)<=ar+br
-	end,
-	
-	["play"]=state{
+	["play"]=tstate{
 		update=function(s)
-			s:check_bullets()
-			s:check_eships()
-			foreach(s.eships,sf.update)
-			foreach(s.bullets,sf.update)
-			s.area:update()
-			s.pship:update()
+			check_bullets()
+			check_eships()
+			foreach(eships,sf.update)
+			foreach(bullets,sf.update)
+			area:update()
+			pship:update()
 		end,
 		draw=function(s)
-			foreach(s.eships,sf.draw)
-			foreach(s.bullets,sf.draw)
-			s.area:draw()
-			s.pship:draw()
+			foreach(eships,sf.draw)
+			foreach(bullets,sf.draw)
+			area:draw()
+			pship:draw()
 		end,
 	}
 }
 
-area=fsm{
-	thickness=3,
+
+tarea=tfsm{
 	col=5,
+	thickness=3,
 
 	init=function(s)
 		s.x0=0
 		s.y0=0
 		s.x1=127
 		s.y1=127
-		fsm.init(s,"main")
+		tfsm.init(s,"main")
 	end,
 	
 	out=function(s,x,y,os)
@@ -273,7 +187,7 @@ area=fsm{
 			y>s.y1-os 
 	end,
 
-	["main"]=state{
+	["main"]=tstate{
 		draw=function(s)
 			for i=1,s.thickness do
 				if i%2==1 then
@@ -284,10 +198,11 @@ area=fsm{
 				end
 			end
 		end,
-	}
+	},
 }
 
-ship=fsm{
+
+tship=tfsm{
 	init_hp=1,
 	rad=2,
 	col=0,
@@ -295,13 +210,12 @@ ship=fsm{
 	bump=3,
 	
 	init=function(s,arg)
-		s.game=arg.game
 		s.hp=s.init_hp
 		s.x=arg.x
 		s.y=arg.y
-		s.on_hit=event:new()
-		s.on_destroy=event:new()
-		fsm.init(s,arg.start)
+		s.on_hit=tevent:new()
+		s.on_destroy=tevent:new()
+		tfsm.init(s,arg.start)
 	end,
 	
 	hit=function(s)
@@ -316,7 +230,6 @@ ship=fsm{
 		local dx,dy=s:move_input()
 		local nx=s.x+dx*s.spd
 		local ny=s.y+dy*s.spd
-		local area=s.game.area
 		if area:out(nx,ny,s.rad) then
 			s.x-=dx*s.bump
 			s.y-=dy*s.bump
@@ -343,18 +256,17 @@ ship=fsm{
 	end,
 }
 
-pship=ship{
+
+tpship=tship{
 	init_hp=2,
 	col=7,
 	spd=1,
 	
 	init=function(s,arg)
 		arg.start="alive"
-		ship.init(s,arg)
-		s.cannon=cannon:new{
-			game=arg.game,
-			pship=s,
-			cooldown=30,
+		tship.init(s,arg)
+		s.cannon=tcannon:new{
+			cooldown=30
 		}
 	end,
 
@@ -372,7 +284,7 @@ pship=ship{
 		return dx,dy
 	end,
 
-	["alive"]=state{
+	["alive"]=tstate{
 		update=function(s)
 			s:move()
 			s.cannon:update()
@@ -384,14 +296,13 @@ pship=ship{
 	}
 }
 
-cannon=fsm{
+
+tcannon=tfsm{
 	init=function(s,arg)
-		s.game=arg.game
-		s.pship=arg.pship
 		s.cooldown=arg.cooldown
 		s.barrels={}
 		s:add_barrel()
-		fsm.init(s,"active")
+		tfsm.init(s,"active")
 	end,
 	
 	add_barrel=function(s)
@@ -401,11 +312,7 @@ cannon=fsm{
 			local lb=s.barrels[n]
 			di=lb:nextdi(1)
 		end
-		local b=barrel:new{
-			game=s.game,
-			pship=s.pship,
-			di=di
-		}
+		local b=tbarrel:new{di=di}
 		add(s.barrels,b)
 	end,
 	
@@ -429,7 +336,7 @@ cannon=fsm{
 		foreach(s.barrels,sf.fire)
 	end,
 	
-	["active"]=state{
+	["active"]=tstate{
 		enter=function(s)
 			s.cooldown_t=s.cooldown
 		end,
@@ -440,24 +347,23 @@ cannon=fsm{
 		draw=function(s)
 			foreach(s.barrels,sf.draw)
 		end,
-	}
+	},
 }
 
-barrel=fsm{
+
+tbarrel=tfsm{
+	col=7,
 	dirs={ -- n/e/s/w
 		{0,-1},{1,0},{0,1},{-1,0},
 	},
-	col=7,
 
 	init=function(s,arg)
-		s.game=arg.game
-		s.pship=arg.pship
 		s.di=arg.di
-		fsm.init(s,"active")
+		tfsm.init(s,"active")
 	end,
 	
 	nextdi=function(s,cw)
-		local n=#barrel.dirs
+		local n=#s.dirs
 		local ndi=s.di+cw
 		if (ndi<1) ndi=n
 		if (ndi>n) ndi=1
@@ -465,8 +371,8 @@ barrel=fsm{
 	end,
 	
 	dirpos=function(s,k)
-		local px=s.pship.x
-		local py=s.pship.y
+		local px=pship.x
+		local py=pship.y
 		local dx,dy=s:dir()
 		return px+dx*k,py+dy*k
 	end,
@@ -482,33 +388,33 @@ barrel=fsm{
 	fire=function(s)
 		local x,y=s:dirpos(4)
 		local dx,dy=s:dir()
-		s.game:spawn_bullet(
-			x,y,dx,dy)
+		spawn_bullet(x,y,dx,dy)
 		sfx(1)
 	end,
-	
-	["active"]=state{
+
+	["active"]=tstate{
 		draw=function(s,di)
 			local x0,y0=s:dirpos(3)
 			local x1,y1=s:dirpos(4)
 			local col=s.col
 			line(x0,y0,x1,y1,col)
 		end,
-	}
+	},
 }
 
-bullet=fsm{
+
+tbullet=tfsm{
 	rad=1,
 	spd=2,
 	col=7,
 	damage=1,
-	
+
 	init=function(s,arg)
 		s.x=arg.x
 		s.y=arg.y
 		s.dx=arg.dx
 		s.dy=arg.dy
-		fsm.init(s,"moving")
+		tfsm.init(s,"moving")
 	end,
 	
 	move=function(s)
@@ -522,46 +428,129 @@ bullet=fsm{
 		local col=s.col
 		pset(x,y,col)
 	end,
-	
-	["moving"]=state{
+
+	["moving"]=tstate{
 		update=function(s)
 			s:move()
 		end,
 		draw=function(s)
 			s:render()
 		end,
-	}
+	},
 }
 
-eship1=ship{
-	init_hp=1,
+
+teship1=tship{
+	init_hp=3,
 	col=8,
 	spd=0.2,
 
 	init=function(s,arg)
 		arg.start="alive"
-		ship.init(s, arg)
+		tship.init(s, arg)
 	end,
 
 	move_input=function(s)
 		local x=s.x
 		local y=s.y
-		local px=s.game.pship.x
-		local py=s.game.pship.y
+		local px=pship.x
+		local py=pship.y
 		return norm(px-x,py-y)
 	end,
 
-	["alive"]=state{
+	["alive"]=tstate{
 		update=function(s)
 			s:move()
 		end,
 		draw=function(s)
 			s:render()
 		end,
-	}
+	},
 }
+-->8
+-- globals
 
+function spawn_scene()
+	scene=tscene:new()
+end
 
+function spawn_game()
+	eships={}
+	bullets={}
+	game=tgame:new()
+end
+
+function spawn_area()
+	area=tarea:new()
+end
+
+function spawn_pship(x,y)
+	pship=tpship:new{x=x,y=y}
+	pship.on_hit:add(
+		on_hit_pship)
+end
+
+function spawn_eship(
+		teship,x,y)
+	local e=teship:new{x=x,y=y}
+	e.on_destroy:add(
+		on_destroy_eship)
+	add(eships,e)
+end
+
+function	spawn_bullet(
+		x,y,dx,dy)
+	local b=tbullet:new{
+			x=x,y=y,dx=dx,dy=dy}
+	add(bullets,b)
+end
+
+function on_hit_pship(p)
+	sfx(3)
+end
+	
+function on_destroy_pship(p)
+end
+
+function on_destroy_eship(e)
+	del(eships,e)
+	sfx(0)
+end
+
+function check_bullets()
+	for b in all(bullets) do
+		if area:out(b.x,b.y) then
+			del(bullets,b)
+		else
+			for e in all(eships) do
+				if collide(b,e) then
+					e:hit(b.damage)
+					del(bullets,b)
+				end
+			end		
+		end
+	end
+end
+
+function check_eships(s)
+	local p=pship
+	for e in all(eships) do
+		if collide(p,e) then
+			p:hit(1)
+			e:hit(1)
+		end
+	end
+end
+
+function collide(a,b)
+	local ax,ay=a.x,a.y
+	local bx,by=b.x,b.y
+	local ar=a.rad or 0
+	local br=b.rad or 0
+	return
+		abs(ax-bx)<=ar+br and
+		abs(ay-by)<=ar+br
+end
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
