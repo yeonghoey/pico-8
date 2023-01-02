@@ -35,19 +35,21 @@ tclass=(function()
 end)()
 
 tfsm=tclass{
-	init=function(s,start)
+	start=function(s,init_state)
 		assert(s.state==nil)
-		s.state=start
+		s.state=init_state
 		s[s.state].enter(s)
 	end,
-	update=function(s)
-		s[s.state].update(s)
+	trans=function(s,to)
 		local st=s.state
-		local to=s[st].trans(s)
-		if to!=nil then
-			s[st].exit(s)
-			s[to].enter(s)
-			s.state=to
+		s[st].exit(s)
+		s[to].enter(s)
+		s.state=to
+	end,
+	update=function(s)
+		local re=true
+		while re do
+			re=s[s.state].update(s)
 		end
 	end,
 	draw=function(s)
@@ -62,7 +64,6 @@ tstate=tclass{
 	update=noop,
 	draw=noop,
 	exit=noop,
-	trans=noop,
 }
 
 tevent=tclass{
@@ -107,16 +108,18 @@ end
 -- types
 tscene=tfsm{
 	init=function(s)
-		tfsm.init(s,"title")
+		s:start("title")
 	end,
 
 	["title"]=tstate{
+		update=function(s)
+			if	btnp(5) then
+				s:trans("main")
+			end
+		end,
 		draw=function(s)
 			cls()
 			print("press ❎ to start")
-		end,
-		trans=function(s)
-			if(btnp(5)) return "main"
 		end,
 	},
 	["main"]=tstate{
@@ -143,7 +146,7 @@ tgame=tfsm{
 		spawn_eship(teship1,100,10)
 		spawn_eship(teship1,10,100)
 		spawn_eship(teship1,100,100)
-		tfsm.init(s,"play")
+		s:start("play")
 	end,
 
 	["play"]=tstate{
@@ -174,7 +177,7 @@ tarea=tfsm{
 		s.y0=0
 		s.x1=127
 		s.y1=127
-		tfsm.init(s,"main")
+		s:start("main")
 	end,
 	
 	out=function(s,x,y,os)
@@ -209,18 +212,18 @@ tship=tfsm{
 	spd=0,
 	bump=3,
 	
-	init=function(s,arg)
+	init_ship=function(s,arg)
 		s.hp=s.init_hp
 		s.x=arg.x
 		s.y=arg.y
 		s.on_hit=tevent:new()
 		s.on_collide=tevent:new()
 		s.on_destroy=tevent:new()
-		tfsm.init(s,arg.start)
 	end,
 	
 	hit=function(s,damage)
 		s.hp-=damage
+		s.justdamaged=true
 		s.on_hit:invoke(s)
 		if s.hp<=0 then
 			s.on_destroy:invoke(s)
@@ -229,11 +232,11 @@ tship=tfsm{
 
 	collide=function(s,dx,dy)
 		s.hp-=1
+		s.justdamaged=true
 		s.on_collide:invoke(s)
 		if s.hp<=0 then
 			s.on_destroy:invoke(s)
 		else
-			-- bump
 			s:move(dx,dy,s.bump)
 		end
 	end,
@@ -250,12 +253,12 @@ tship=tfsm{
 		end
 	end,
 
-	render=function(s)
+	render=function(s,col)
 		local hp=s.hp
 		local x=s.x
 		local y=s.y
 		local r=s.rad
-		local col=s.col	
+		local col=col or s.col	
 		if hp > 2 then
 			circfill(x,y,r,col)
 		elseif hp == 2 then
@@ -274,11 +277,9 @@ tpship=tship{
 	spd=1,
 	
 	init=function(s,arg)
-		arg.start="alive"
-		tship.init(s,arg)
-		s.cannon=tcannon:new{
-			cooldown=30
-		}
+		s:init_ship(arg)
+		s.cannon=tcannon:new()
+		s:start("alive")
 	end,
 
 	move_input=function(s)
@@ -296,25 +297,50 @@ tpship=tship{
 	end,
 
 	["alive"]=tstate{
+		enter=function(s)
+			s.damaged=false
+		end,
 		update=function(s)
 			local dx,dy=s:move_input()
 			s:move(dx,dy,s.spd)
 			s.cannon:update()
 		end,
+		trans=function(s)
+			if s.justdamaged then
+				return "invincible"
+			end
+		end,
 		draw=function(s)
 			s:render()
 			s.cannon:draw()
+		end,
+	},
+	["invincible"]=tstate{
+		enter=function(s)
+			s.invincible_t=invincible_d
+		end,
+		update=function(s)
+			s.invincible_t-=1
+		end,
+		trans=function(s)
+			if s.invincible_t<=0 then
+				return "alive"
+			end
+		end,
+		draw=function(s)
+			local col=s.col
+			if (s.invincible_t%2) col=0
+			s:render(col)
 		end,
 	}
 }
 
 
 tcannon=tfsm{
-	init=function(s,arg)
-		s.cooldown=arg.cooldown
+	init=function(s)
 		s.barrels={}
 		s:add_barrel()
-		tfsm.init(s,"active")
+		s:start("active")
 	end,
 	
 	add_barrel=function(s)
@@ -344,13 +370,13 @@ tcannon=tfsm{
 		if s.cooldown_t>0 then
 			return
 		end
-		s.cooldown_t=s.cooldown
+		s.cooldown_t=cooldown_d
 		foreach(s.barrels,sf.fire)
 	end,
 	
 	["active"]=tstate{
 		enter=function(s)
-			s.cooldown_t=s.cooldown
+			s.cooldown_t=cooldown_d
 		end,
 		update=function(s)
 			s:update_rotate()
@@ -371,7 +397,7 @@ tbarrel=tfsm{
 
 	init=function(s,arg)
 		s.di=arg.di
-		tfsm.init(s,"active")
+		s:start("active")
 	end,
 	
 	nextdi=function(s,cw)
@@ -426,7 +452,7 @@ tbullet=tfsm{
 		s.y=arg.y
 		s.dx=arg.dx
 		s.dy=arg.dy
-		tfsm.init(s,"moving")
+		s:start("moving")
 	end,
 	
 	move=function(s)
@@ -458,8 +484,8 @@ teship1=tship{
 	spd=0.2,
 
 	init=function(s,arg)
-		arg.start="alive"
-		tship.init(s, arg)
+		s:init_ship(arg)
+		s:start("alive")
 	end,
 
 	move_input=function(s)
@@ -490,7 +516,13 @@ end
 function spawn_game()
 	eships={}
 	bullets={}
+	reset_gameparams()
 	game=tgame:new()
+end
+
+function reset_gameparams()
+	cooldown_d=30
+	invincible_d=30
 end
 
 function spawn_area()
