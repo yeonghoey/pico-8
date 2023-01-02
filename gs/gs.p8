@@ -35,9 +35,12 @@ tclass=(function()
 end)()
 
 tfsm=tclass{
+	init=function(s)
+		s:start()
+	end,
 	start=function(s,init_state)
 		assert(s.state==nil)
-		s.state=init_state
+		s.state=init_state or 1
 		s[s.state].enter(s)
 	end,
 	trans=function(s,to)
@@ -118,16 +121,13 @@ function printt(t)
 end
 -->8
 -- types
-tscene=tfsm{
-	init=function(s)
-		s:start("title")
-	end,
-}
 
-tscene["title"]=tstate{
+tscene=tfsm{}
+
+tscene[1]=tstate{ -- title
 	update=function(s)
 		if	btnp(5) then
-			s:trans("main")
+			s:trans(2)
 		end
 	end,
 	draw=function(s)
@@ -136,7 +136,7 @@ tscene["title"]=tstate{
 	end,
 }
 
-tscene["main"]=tstate{
+tscene[2]=tstate{ -- main
 	enter=function(s)
 		spawn_game()
 		spawn_hud()
@@ -153,31 +153,27 @@ tscene["main"]=tstate{
 }
 
 
-thud=tfsm{
-	init=function(s)
-		s:start("main")
-	end,
-}
+thud=tfsm{}
 
-thud["main"]=tstate{
+thud[1]=tstate{ -- main
 	update=function(s)
-		labremain:update()
 		labwave:update()
 	end,
 	draw=function(s)
-		labremain:draw()	
 		labwave:draw()
 	end,
 }
 
 
 tlabel=tfsm{
-	init=function(s)
-		s:start("main")
-	end
+	str="undefined",
+	x=0,
+	y=0,
+	col=0,
+	align="left",
 }
 
-tlabel["main"]=tstate{
+tlabel[1]=tstate{
 	draw=function(s)
 		printt(s)
 	end,
@@ -192,15 +188,6 @@ tlabwave=tlabel{
 }
 
 
-tlabremain=tlabel{
-	str="remain 4/4",
-	x=2,
-	y=3,
-	col=5,
-	align="left",
-}
-
-
 tgame=tfsm{
 	init=function(s)
 		spawn_area()
@@ -210,11 +197,11 @@ tgame=tfsm{
 		spawn_eship(teship1,100,20)
 		spawn_eship(teship1,20,100)
 		spawn_eship(teship1,100,100)
-		s:start("play")
+		s:start()
 	end,
 }
 
-tgame["play"]=tstate{
+tgame[1]=tstate{ -- play
 	update=function(s)
 		check_bullets()
 		check_eships()
@@ -235,15 +222,11 @@ tgame["play"]=tstate{
 tarea=tfsm{
 	col=5,
 	thickness=3,
+	x0=12,
+	y0=12,
+	x1=112,
+	y1=112,
 
-	init=function(s)
-		s.x0=12
-		s.y0=12
-		s.x1=112
-		s.y1=112
-		s:start("main")
-	end,
-	
 	out=function(s,x,y,os)
 		local os=os or 0
 		os+=s.thickness
@@ -255,7 +238,7 @@ tarea=tfsm{
 	end,
 }
 
-tarea["main"]=tstate{
+tarea[1]=tstate{
 	draw=function(s)
 		for i=1,s.thickness do
 			if i%2==1 then
@@ -338,10 +321,10 @@ tpship=tship{
 	col=7,
 	spd=1,
 	
-	init=function(s,arg)
-		s:init_ship(arg)
+	init=function(s)
+		s:init_ship()
 		s.cannon=tcannon:new()
-		s:start("alive")
+		s:start()
 	end,
 
 	move_input=function(s)
@@ -359,7 +342,7 @@ tpship=tship{
 	end,
 }
 
-tpship["alive"]=tstate{
+tpship[1]=tstate{ -- alive
 	enter=function(s)
 		s.damaged=false
 	end,
@@ -368,33 +351,9 @@ tpship["alive"]=tstate{
 		s:move(dx,dy,s.spd)
 		s.cannon:update()
 	end,
-	trans=function(s)
-		if s.justdamaged then
-			return "invincible"
-		end
-	end,
 	draw=function(s)
 		s:render()
 		s.cannon:draw()
-	end,
-}
-
-tpship["invincible"]=tstate{
-	enter=function(s)
-		s.invincible_t=invincible_d
-	end,
-	update=function(s)
-		s.invincible_t-=1
-	end,
-	trans=function(s)
-		if s.invincible_t<=0 then
-			return "alive"
-		end
-	end,
-	draw=function(s)
-		local col=s.col
-		if (s.invincible_t%2) col=0
-		s:render(col)
 	end,
 }
 
@@ -403,7 +362,7 @@ tcannon=tfsm{
 	init=function(s)
 		s.barrels={}
 		s:add_barrel()
-		s:start("active")
+		s:start()
 	end,
 	
 	add_barrel=function(s)
@@ -439,7 +398,7 @@ tcannon=tfsm{
 }
 
 	
-tcannon["active"]=tstate{
+tcannon[1]=tstate{
 	enter=function(s)
 		s.cooldown_t=cooldown_d
 	end,
@@ -455,14 +414,13 @@ tcannon["active"]=tstate{
 
 tbarrel=tfsm{
 	col=7,
-	dirs={ -- n/e/s/w
-		{0,-1},{1,0},{0,1},{-1,0},
+	dirs={
+		{0,-1},
+		{1,0},
+		{0,1},
+		{-1,0},
 	},
 
-	init=function(s)
-		s:start("active")
-	end,
-	
 	nextdi=function(s,cw)
 		local n=#s.dirs
 		local ndi=s.di+cw
@@ -495,7 +453,7 @@ tbarrel=tfsm{
 
 }
 
-tbarrel["active"]=tstate{
+tbarrel[1]=tstate{
 	draw=function(s,di)
 		local x0,y0=s:dirpos(3)
 		local x1,y1=s:dirpos(4)
@@ -510,10 +468,6 @@ tbullet=tfsm{
 	col=7,
 	damage=1,
 
-	init=function(s)
-		s:start("moving")
-	end,
-	
 	move=function(s)
 		s.x+=s.dx*s.spd
 		s.y+=s.dy*s.spd
@@ -527,7 +481,7 @@ tbullet=tfsm{
 	end,
 }
 
-tbullet["moving"]=tstate{
+tbullet[1]=tstate{
 	update=function(s)
 		s:move(s.dx,s.dy,s.spd)
 	end,
@@ -544,7 +498,7 @@ teship1=tship{
 
 	init=function(s,arg)
 		s:init_ship(arg)
-		s:start("alive")
+		s:start()
 	end,
 
 	move_input=function(s)
@@ -556,7 +510,7 @@ teship1=tship{
 	end,
 }
 
-teship1["alive"]=tstate{
+teship1[1]=tstate{
 	update=function(s)
 		local dx,dy=s:move_input()
 		s:move(dx,dy,s.spd)
@@ -574,7 +528,6 @@ end
 
 function spawn_hud()
 	labwave=tlabwave:new()
-	labremain=tlabremain:new()
 	hud=thud:new()
 end
 
