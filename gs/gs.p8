@@ -233,7 +233,7 @@ tship=tfsm{
 		if area:out(nx,ny,s.rad) then
 			s.x-=dx*s.bump
 			s.y-=dy*s.bump
-			sfx(2)
+			sfx(sfx_bump)
 		else
 			s.x,s.y=nx,ny
 		end
@@ -389,7 +389,7 @@ tbarrel=tfsm{
 		local x,y=s:dirpos(4)
 		local dx,dy=s:dir()
 		spawn_bullet(x,y,dx,dy)
-		sfx(1)
+		sfx(sfx_fire)
 	end,
 
 	["active"]=tstate{
@@ -506,7 +506,7 @@ function	spawn_bullet(
 end
 
 function on_hit_pship(p)
-	sfx(3)
+	sfx(sfx_hit)
 end
 	
 function on_destroy_pship(p)
@@ -514,7 +514,7 @@ end
 
 function on_destroy_eship(e)
 	del(eships,e)
-	sfx(0)
+	sfx(sfx_destroy)
 end
 
 function check_bullets()
@@ -551,6 +551,15 @@ function collide(a,b)
 		abs(ax-bx)<=ar+br and
 		abs(ay-by)<=ar+br
 end
+-->8
+-- constants
+
+-- sfx
+sfx_destroy=0
+sfx_fire=1
+sfx_bump=2
+sfx_hit=3
+
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
