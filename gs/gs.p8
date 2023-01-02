@@ -142,7 +142,6 @@ end
 -- types
 
 tscene=tfsm{}
-
 tscene[1]=tstate{ -- title
 	update=function(s)
 		if	btnp(5) then
@@ -154,7 +153,6 @@ tscene[1]=tstate{ -- title
 		print("press ❎ to start")
 	end,
 }
-
 tscene[2]=tstate{ -- main
 	enter=function(s)
 		spawn_game()
@@ -173,11 +171,7 @@ tscene[2]=tstate{ -- main
 
 
 thud=tfsm{}
-
 thud[1]=tstate{ -- main
-	enter=function(s)
-		labwave:animate_col()
-	end,
 	update=function(s)
 		labwave:update()
 	end,
@@ -199,7 +193,6 @@ tlabel=tfsm{
 		s:trans(2)
 	end
 }
-
 tlabel[1]=tstate{
 	enter=function(s)
 		s.col=nil
@@ -208,7 +201,6 @@ tlabel[1]=tstate{
 		printt(s)
 	end,
 }
-
 tlabel[2]=tstate{
 	enter=function(s)
 		s.colseq_f=seq(s.colseq)
@@ -243,16 +235,30 @@ tgame=tfsm{
 	init=function(s)
 		spawn_area()
 		spawn_pship(64,64)
-		-- test
-		spawn_eship(teship1,20,20)
-		spawn_eship(teship1,100,20)
-		spawn_eship(teship1,20,100)
-		spawn_eship(teship1,100,100)
+		s.on_start_wave=tevent:new()
 		s:start()
 	end,
+	render=function(s)
+		foreach(eships,sf.draw)
+		foreach(bullets,sf.draw)
+		area:draw()
+		pship:draw()
+	end,
 }
-
-tgame[1]=tstate{ -- play
+tgame[1]=tstate{ -- spawn
+	update=function(s)
+		local wave=waves[wave_num]
+		for arg in all(wave) do
+			spawn_eship(unpack(arg))
+		end
+		s.on_start_wave:invoke()
+		s:trans(2)
+	end,
+	draw=function(s)
+		s:render()
+	end,
+}
+tgame[2]=tstate{ -- play
 	update=function(s)
 		check_bullets()
 		check_eships()
@@ -262,10 +268,14 @@ tgame[1]=tstate{ -- play
 		pship:update()
 	end,
 	draw=function(s)
-		foreach(eships,sf.draw)
-		foreach(bullets,sf.draw)
-		area:draw()
-		pship:draw()
+		s:render()
+	end,
+}
+tgame[3]=tstate{
+	update=function(s)
+	end,
+	draw=function(s)
+		s:render()
 	end,
 }
 
@@ -288,7 +298,6 @@ tarea=tfsm{
 			y>s.y1-os 
 	end,
 }
-
 tarea[1]=tstate{
 	draw=function(s)
 		for i=1,s.thickness do
@@ -392,7 +401,6 @@ tpship=tship{
 		return dx,dy
 	end,
 }
-
 tpship[1]=tstate{ -- alive
 	enter=function(s)
 		s.damaged=false
@@ -447,8 +455,6 @@ tcannon=tfsm{
 		foreach(s.barrels,sf.fire)
 	end,
 }
-
-	
 tcannon[1]=tstate{
 	enter=function(s)
 		s.cooldown_t=cooldown_d
@@ -503,7 +509,6 @@ tbarrel=tfsm{
 	end,
 
 }
-
 tbarrel[1]=tstate{
 	draw=function(s,di)
 		local x0,y0=s:dirpos(3)
@@ -531,7 +536,6 @@ tbullet=tfsm{
 		pset(x,y,col)
 	end,
 }
-
 tbullet[1]=tstate{
 	update=function(s)
 		s:move(s.dx,s.dy,s.spd)
@@ -560,7 +564,6 @@ teship1=tship{
 		return norm(px-x,py-y)
 	end,
 }
-
 teship1[1]=tstate{
 	update=function(s)
 		local dx,dy=s:move_input()
@@ -580,6 +583,13 @@ end
 function spawn_hud()
 	labwave=tlabwave:new()
 	hud=thud:new()
+	game.on_start_wave:add(function()
+		local k=wave_num
+		local n=#waves
+		labwave.str=
+			"wave "..k.."/"..n
+		labwave:animate_col()
+	end)
 end
 
 function spawn_game()
@@ -590,6 +600,7 @@ function spawn_game()
 end
 
 function reset_gameparams()
+	wave_num=1
 	cooldown_d=30
 	invincible_d=30
 end
@@ -635,6 +646,14 @@ end
 function on_destroy_eship(e)
 	del(eships,e)
 	sfx(sfx_destroy)
+	if #eships==0 then
+		wave_num+=1
+		if wave_num<=#waves then
+			game:trans(1)
+		else
+			game:trans(3) -- end
+		end
+	end
 end
 
 function check_bullets()
@@ -675,6 +694,30 @@ function overlap(a,b)
 end
 -->8
 -- constants
+
+-- wave
+waves={}
+
+waves[1]={
+	{teship1,20,20},
+	{teship1,100,20},
+	{teship1,20,100},
+	{teship1,100,100},
+}
+
+waves[2]={
+	{teship1,20,20},
+	{teship1,100,20},
+	{teship1,20,100},
+	{teship1,100,100},
+}
+
+waves[3]={
+	{teship1,20,20},
+	{teship1,100,20},
+	{teship1,20,100},
+	{teship1,100,100},
+}
 
 -- sfx
 sfx_destroy=0
