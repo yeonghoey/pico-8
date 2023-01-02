@@ -214,22 +214,33 @@ tship=tfsm{
 		s.x=arg.x
 		s.y=arg.y
 		s.on_hit=tevent:new()
+		s.on_collide=tevent:new()
 		s.on_destroy=tevent:new()
 		tfsm.init(s,arg.start)
 	end,
 	
-	hit=function(s)
-		s.hp-=1
+	hit=function(s,damage)
+		s.hp-=damage
 		s.on_hit:invoke(s)
 		if s.hp<=0 then
 			s.on_destroy:invoke(s)
 		end
 	end,
 
-	move=function(s)
-		local dx,dy=s:move_input()
-		local nx=s.x+dx*s.spd
-		local ny=s.y+dy*s.spd
+	collide=function(s,dx,dy)
+		s.hp-=1
+		s.on_collide:invoke(s)
+		if s.hp<=0 then
+			s.on_destroy:invoke(s)
+		else
+			-- bump
+			s:move(dx,dy,s.bump)
+		end
+	end,
+	
+	move=function(s,dx,dy,spd)
+		local nx=s.x+dx*spd
+		local ny=s.y+dy*spd
 		if area:out(nx,ny,s.rad) then
 			s.x-=dx*s.bump
 			s.y-=dy*s.bump
@@ -286,7 +297,8 @@ tpship=tship{
 
 	["alive"]=tstate{
 		update=function(s)
-			s:move()
+			local dx,dy=s:move_input()
+			s:move(dx,dy,s.spd)
 			s.cannon:update()
 		end,
 		draw=function(s)
@@ -431,7 +443,7 @@ tbullet=tfsm{
 
 	["moving"]=tstate{
 		update=function(s)
-			s:move()
+			s:move(s.dx,s.dy,s.spd)
 		end,
 		draw=function(s)
 			s:render()
@@ -460,7 +472,8 @@ teship1=tship{
 
 	["alive"]=tstate{
 		update=function(s)
-			s:move()
+			local dx,dy=s:move_input()
+			s:move(dx,dy,s.spd)
 		end,
 		draw=function(s)
 			s:render()
@@ -488,6 +501,8 @@ function spawn_pship(x,y)
 	pship=tpship:new{x=x,y=y}
 	pship.on_hit:add(
 		on_hit_pship)
+	pship.on_collide:add(
+		on_collide_pship)
 end
 
 function spawn_eship(
@@ -508,6 +523,10 @@ end
 function on_hit_pship(p)
 	sfx(sfx_hit)
 end
+
+function on_collide_pship(p,e)
+	sfx(sfx_collide)
+end
 	
 function on_destroy_pship(p)
 end
@@ -523,7 +542,7 @@ function check_bullets()
 			del(bullets,b)
 		else
 			for e in all(eships) do
-				if collide(b,e) then
+				if overlap(b,e) then
 					e:hit(b.damage)
 					del(bullets,b)
 				end
@@ -535,14 +554,16 @@ end
 function check_eships(s)
 	local p=pship
 	for e in all(eships) do
-		if collide(p,e) then
-			p:hit(1)
-			e:hit(1)
+		if overlap(p,e) then
+			local dx,dy=norm(
+				p.x-e.x, p.y-e.y)
+			p:collide(dx,dy)
+			e:collide(-dx,-dy)
 		end
 	end
 end
 
-function collide(a,b)
+function overlap(a,b)
 	local ax,ay=a.x,a.y
 	local bx,by=b.x,b.y
 	local ar=a.rad or 0
@@ -559,6 +580,7 @@ sfx_destroy=0
 sfx_fire=1
 sfx_bump=2
 sfx_hit=3
+sfx_collide=4
 
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -572,3 +594,4 @@ __sfx__
 00010000230500000034050370503a0503c0503f0503f050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000100003b0503705028050290501f0501c0501a0501905020050270502a0503300035000380003b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0001000000000340503a05017650236501665018650236502d6503305000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0001000000000196501a6301c6301f6401662032650346201e64018650136502464013640176401b6501065013650166503b600186201e600136002360013600286000f6001a6000000000000000000000000000
