@@ -110,30 +110,31 @@ tscene=tfsm{
 	init=function(s)
 		s:start("title")
 	end,
+}
 
-	["title"]=tstate{
-		update=function(s)
-			if	btnp(5) then
-				s:trans("main")
-			end
-		end,
-		draw=function(s)
-			cls()
-			print("press ❎ to start")
-		end,
-	},
-	["main"]=tstate{
-		enter=function(s)
-			spawn_game()
-		end,
-		update=function(s)
-			game:update()
-		end,
-		draw=function(s)
-			cls()
-			game:draw()
-		end,
-	}
+tscene["title"]=tstate{
+	update=function(s)
+		if	btnp(5) then
+			s:trans("main")
+		end
+	end,
+	draw=function(s)
+		cls()
+		print("press ❎ to start")
+	end,
+}
+
+tscene["main"]=tstate{
+	enter=function(s)
+		spawn_game()
+	end,
+	update=function(s)
+		game:update()
+	end,
+	draw=function(s)
+		cls()
+		game:draw()
+	end,
 }
 
 
@@ -148,23 +149,23 @@ tgame=tfsm{
 		spawn_eship(teship1,100,100)
 		s:start("play")
 	end,
+}
 
-	["play"]=tstate{
-		update=function(s)
-			check_bullets()
-			check_eships()
-			foreach(eships,sf.update)
-			foreach(bullets,sf.update)
-			area:update()
-			pship:update()
-		end,
-		draw=function(s)
-			foreach(eships,sf.draw)
-			foreach(bullets,sf.draw)
-			area:draw()
-			pship:draw()
-		end,
-	}
+tgame["play"]=tstate{
+	update=function(s)
+		check_bullets()
+		check_eships()
+		foreach(eships,sf.update)
+		foreach(bullets,sf.update)
+		area:update()
+		pship:update()
+	end,
+	draw=function(s)
+		foreach(eships,sf.draw)
+		foreach(bullets,sf.draw)
+		area:draw()
+		pship:draw()
+	end,
 }
 
 
@@ -189,19 +190,19 @@ tarea=tfsm{
 			y<s.y0+os or
 			y>s.y1-os 
 	end,
+}
 
-	["main"]=tstate{
-		draw=function(s)
-			for i=1,s.thickness do
-				if i%2==1 then
-					rect(
-						s.x0+i-1,s.y0+i-1,
-						s.x1-i+1,s.y1-i+1,
-						s.col)
-				end
+tarea["main"]=tstate{
+	draw=function(s)
+		for i=1,s.thickness do
+			if i%2==1 then
+				rect(
+					s.x0+i-1,s.y0+i-1,
+					s.x1-i+1,s.y1-i+1,
+					s.col)
 			end
-		end,
-	},
+		end
+	end,
 }
 
 
@@ -295,44 +296,45 @@ tpship=tship{
 		end
 		return dx,dy
 	end,
+}
 
-	["alive"]=tstate{
-		enter=function(s)
-			s.damaged=false
-		end,
-		update=function(s)
-			local dx,dy=s:move_input()
-			s:move(dx,dy,s.spd)
-			s.cannon:update()
-		end,
-		trans=function(s)
-			if s.justdamaged then
-				return "invincible"
-			end
-		end,
-		draw=function(s)
-			s:render()
-			s.cannon:draw()
-		end,
-	},
-	["invincible"]=tstate{
-		enter=function(s)
-			s.invincible_t=invincible_d
-		end,
-		update=function(s)
-			s.invincible_t-=1
-		end,
-		trans=function(s)
-			if s.invincible_t<=0 then
-				return "alive"
-			end
-		end,
-		draw=function(s)
-			local col=s.col
-			if (s.invincible_t%2) col=0
-			s:render(col)
-		end,
-	}
+tpship["alive"]=tstate{
+	enter=function(s)
+		s.damaged=false
+	end,
+	update=function(s)
+		local dx,dy=s:move_input()
+		s:move(dx,dy,s.spd)
+		s.cannon:update()
+	end,
+	trans=function(s)
+		if s.justdamaged then
+			return "invincible"
+		end
+	end,
+	draw=function(s)
+		s:render()
+		s.cannon:draw()
+	end,
+}
+
+tpship["invincible"]=tstate{
+	enter=function(s)
+		s.invincible_t=invincible_d
+	end,
+	update=function(s)
+		s.invincible_t-=1
+	end,
+	trans=function(s)
+		if s.invincible_t<=0 then
+			return "alive"
+		end
+	end,
+	draw=function(s)
+		local col=s.col
+		if (s.invincible_t%2) col=0
+		s:render(col)
+	end,
 }
 
 
@@ -373,19 +375,20 @@ tcannon=tfsm{
 		s.cooldown_t=cooldown_d
 		foreach(s.barrels,sf.fire)
 	end,
+}
+
 	
-	["active"]=tstate{
-		enter=function(s)
-			s.cooldown_t=cooldown_d
-		end,
-		update=function(s)
-			s:update_rotate()
-			s:update_fire()
-		end,
-		draw=function(s)
-			foreach(s.barrels,sf.draw)
-		end,
-	},
+tcannon["active"]=tstate{
+	enter=function(s)
+		s.cooldown_t=cooldown_d
+	end,
+	update=function(s)
+		s:update_rotate()
+		s:update_fire()
+	end,
+	draw=function(s)
+		foreach(s.barrels,sf.draw)
+	end,
 }
 
 
@@ -430,16 +433,16 @@ tbarrel=tfsm{
 		sfx(sfx_fire)
 	end,
 
-	["active"]=tstate{
-		draw=function(s,di)
-			local x0,y0=s:dirpos(3)
-			local x1,y1=s:dirpos(4)
-			local col=s.col
-			line(x0,y0,x1,y1,col)
-		end,
-	},
 }
 
+tbarrel["active"]=tstate{
+	draw=function(s,di)
+		local x0,y0=s:dirpos(3)
+		local x1,y1=s:dirpos(4)
+		local col=s.col
+		line(x0,y0,x1,y1,col)
+	end,
+}
 
 tbullet=tfsm{
 	rad=1,
@@ -466,15 +469,15 @@ tbullet=tfsm{
 		local col=s.col
 		pset(x,y,col)
 	end,
+}
 
-	["moving"]=tstate{
-		update=function(s)
-			s:move(s.dx,s.dy,s.spd)
-		end,
-		draw=function(s)
-			s:render()
-		end,
-	},
+tbullet["moving"]=tstate{
+	update=function(s)
+		s:move(s.dx,s.dy,s.spd)
+	end,
+	draw=function(s)
+		s:render()
+	end,
 }
 
 
@@ -495,16 +498,16 @@ teship1=tship{
 		local py=pship.y
 		return norm(px-x,py-y)
 	end,
+}
 
-	["alive"]=tstate{
-		update=function(s)
-			local dx,dy=s:move_input()
-			s:move(dx,dy,s.spd)
-		end,
-		draw=function(s)
-			s:render()
-		end,
-	},
+teship1["alive"]=tstate{
+	update=function(s)
+		local dx,dy=s:move_input()
+		s:move(dx,dy,s.spd)
+	end,
+	draw=function(s)
+		s:render()
+	end,
 }
 -->8
 -- globals
