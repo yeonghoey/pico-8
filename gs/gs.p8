@@ -103,7 +103,19 @@ function norm(x,y)
 	end
 end
 
-
+function printt(t)
+	local str=t.str
+	local x=t.x
+	local y=t.y
+	local col=t.col
+	if t.align=="center" then
+		x=x-#str*2
+	elseif t.align=="right" then
+		x=x-#str*4
+	end
+	
+ print(str,x,y,col)
+end
 -->8
 -- types
 tscene=tfsm{
@@ -127,14 +139,65 @@ tscene["title"]=tstate{
 tscene["main"]=tstate{
 	enter=function(s)
 		spawn_game()
+		spawn_hud()
 	end,
 	update=function(s)
 		game:update()
+		hud:update()
 	end,
 	draw=function(s)
 		cls()
 		game:draw()
+		hud:draw()
 	end,
+}
+
+
+thud=tfsm{
+	init=function(s)
+		s:start("main")
+	end,
+}
+
+thud["main"]=tstate{
+	update=function(s)
+		labremain:update()
+		labwave:update()
+	end,
+	draw=function(s)
+		labremain:draw()	
+		labwave:draw()
+	end,
+}
+
+
+tlabel=tfsm{
+	init=function(s)
+		s:start("main")
+	end
+}
+
+tlabel["main"]=tstate{
+	draw=function(s)
+		printt(s)
+	end,
+}
+
+tlabwave=tlabel{
+	str="wave 1/10",
+	x=125,
+	y=3,
+	col=5,
+	align="right",
+}
+
+
+tlabremain=tlabel{
+	str="remain 4/4",
+	x=2,
+	y=3,
+	col=5,
+	align="left",
 }
 
 
@@ -143,9 +206,9 @@ tgame=tfsm{
 		spawn_area()
 		spawn_pship(64,64)
 		-- test
-		spawn_eship(teship1,10,10)
-		spawn_eship(teship1,100,10)
-		spawn_eship(teship1,10,100)
+		spawn_eship(teship1,20,20)
+		spawn_eship(teship1,100,20)
+		spawn_eship(teship1,20,100)
 		spawn_eship(teship1,100,100)
 		s:start("play")
 	end,
@@ -174,10 +237,10 @@ tarea=tfsm{
 	thickness=3,
 
 	init=function(s)
-		s.x0=0
-		s.y0=0
-		s.x1=127
-		s.y1=127
+		s.x0=12
+		s.y0=12
+		s.x1=112
+		s.y1=112
 		s:start("main")
 	end,
 	
@@ -514,6 +577,12 @@ teship1["alive"]=tstate{
 
 function spawn_scene()
 	scene=tscene:new()
+end
+
+function spawn_hud()
+	labwave=tlabwave:new()
+	labremain=tlabremain:new()
+	hud=thud:new()
 end
 
 function spawn_game()
