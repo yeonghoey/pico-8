@@ -116,8 +116,27 @@ function printt(t)
 	elseif t.align=="right" then
 		x=x-#str*4
 	end
-	
- print(str,x,y,col)
+	print(str,x,y,col)
+end
+
+function seq(arg)
+	local nidx=1
+	local lcnt=arg.loop or 1
+	return function()
+		if #arg==0 then
+			return nil
+		end
+		if lcnt==0 then
+			return nil
+		end
+		local v=arg[nidx]
+		nidx+=1
+		if nidx>#arg then
+			nidx=1
+			lcnt-=1
+		end
+		return v
+	end
 end
 -->8
 -- types
@@ -156,6 +175,9 @@ tscene[2]=tstate{ -- main
 thud=tfsm{}
 
 thud[1]=tstate{ -- main
+	enter=function(s)
+		labwave:animate_col()
+	end,
 	update=function(s)
 		labwave:update()
 	end,
@@ -166,25 +188,54 @@ thud[1]=tstate{ -- main
 
 
 tlabel=tfsm{
+	align="left",
 	str="undefined",
 	x=0,
 	y=0,
 	col=0,
-	align="left",
+	colseq={},
+	
+	animate_col=function(s)
+		s:trans(2)
+	end
 }
 
 tlabel[1]=tstate{
+	enter=function(s)
+		s.col=nil
+	end,
 	draw=function(s)
 		printt(s)
 	end,
 }
 
+tlabel[2]=tstate{
+	enter=function(s)
+		s.colseq_f=seq(s.colseq)
+	end,
+	update=function(s)
+		s.col=s.colseq_f()
+		if s.col==nil then
+			s:trans(1)
+		end
+	end,
+	draw=function(s)
+		printt(s)
+	end,
+}
+
+
 tlabwave=tlabel{
+	align="right",
 	str="wave 1/10",
 	x=125,
 	y=3,
 	col=5,
-	align="right",
+	colseq={
+		5,5,5,5,
+		10,10,10,10,
+		loop=5,
+	},
 }
 
 
