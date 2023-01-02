@@ -26,9 +26,9 @@ tclass=(function()
 		return o
 	end
 	return f({},{
-		new=function(s,...)
-			local o=s()
-			o:init(...)
+		new=function(s,o)
+			o=s(o)
+			o:init()
 			return o
 		end,
 	})
@@ -276,10 +276,8 @@ tship=tfsm{
 	spd=0,
 	bump=3,
 	
-	init_ship=function(s,arg)
+	init_ship=function(s)
 		s.hp=s.init_hp
-		s.x=arg.x
-		s.y=arg.y
 		s.on_hit=tevent:new()
 		s.on_collide=tevent:new()
 		s.on_destroy=tevent:new()
@@ -461,8 +459,7 @@ tbarrel=tfsm{
 		{0,-1},{1,0},{0,1},{-1,0},
 	},
 
-	init=function(s,arg)
-		s.di=arg.di
+	init=function(s)
 		s:start("active")
 	end,
 	
@@ -513,11 +510,7 @@ tbullet=tfsm{
 	col=7,
 	damage=1,
 
-	init=function(s,arg)
-		s.x=arg.x
-		s.y=arg.y
-		s.dx=arg.dx
-		s.dy=arg.dy
+	init=function(s)
 		s:start("moving")
 	end,
 	
