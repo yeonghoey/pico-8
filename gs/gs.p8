@@ -114,6 +114,7 @@ tmain=tclass{
 
 	update=function(s)
 		game:update()
+		hud:update()
 	end,
 
 	draw=function(s)
@@ -125,17 +126,77 @@ tmain=tclass{
 
 thud=tclass{
 	init=function(s)
-		s.wave=tlabel:new{
+		s.wave=tlabel_wave:new{}
+	end,
+
+	on_wave_start=function(s)
+		s.wave:blink()
+	end,
+	
+	update=function(s)
+		s.wave:update()
+	end,
+	
+	draw=function(s)
+		s.wave:draw()
+	end,
+}
+
+tlabel_wave=tlabel{
 			str="wave 0/0",
 			align="right",
 			x=125,
 			y=3,
 			col=5,
+
+	init=function(s)
+		s.animval_col=tanimval:new{
+			default=s.col,
+			vals={5,5,5,5,10,10,10,10},
+			loop=5,
 		}
 	end,
 	
-	draw=function(s)
-		s.wave:draw()
+	update=function(s)
+		s.col=s.animval_col:next()
+	end,
+	
+	blink=function(s)
+		s.animval_col:play()
+	end,
+		}
+
+tanimval=tclass{
+	default=nil,
+	vals={},
+	loop=1,
+
+	init=function(s)
+		s.next_idx=1
+		s.loop_cnt=0
+	end,
+	
+	play=function(s,loop)
+		s.next_idx=1
+		s.loop_cnt=loop or s.loop
+	end,
+	
+	stop=function(s)
+		s.next_idx=1
+		s.loop_cnt=0
+	end,
+	
+	next=function(s)
+		if s.loop_cnt==0 then
+			return s.default
+		end
+		local v=s.vals[s.next_idx]
+		s.next_idx+=1
+		if s.next_idx>#s.vals then
+			s.next_idx=1
+			s.loop_cnt-=1
+		end
+		return v
 	end,
 }
 
@@ -244,6 +305,7 @@ twave=tclass{
 		local n=#wavespecs
 		hud.wave.str=
 			"wave "..k.."/"..n
+		hud:on_wave_start()
 	end,
 
 	on_clear=function(s)
