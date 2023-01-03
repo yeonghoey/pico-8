@@ -1,10 +1,12 @@
 pico-8 cartridge // http://www.pico-8.com
 version 39
 __lua__
+-- entry
+
 cls()
 
 function _init()
-	spawn_scene()
+	scene=tscene:new{}
 end
 
 function _update()
@@ -16,88 +18,28 @@ function _draw()
 end
 -->8
 -- core
+
 tclass=(function()
-	local f
-	f=function(s,o)
+	local ctor
+	ctor=function(s,o)
 		o=o or {}
 		setmetatable(o,s)
 		s.__index=s
-		s.__call=f
+		s.__call=ctor
 		return o
 	end
-	return f({},{
+	return ctor({},{
 		new=function(s,o)
-			o=s(o)
+			o=ctor(s,o)
 			o:init()
 			return o
+		end,
+		init=function(s)
 		end,
 	})
 end)()
 
-tfsm=tclass{
-	init=function(s)
-		s:start()
-	end,
-	start=function(s,init_state)
-		assert(s.state==nil)
-		s.state=init_state or 1
-		s[s.state].enter(s)
-	end,
-	trans=function(s,to)
-		local st=s.state
-		s[st].exit(s)
-		s[to].enter(s)
-		s.state=to
-	end,
-	update=function(s)
-		local re=true
-		while re do
-			re=s[s.state].update(s)
-		end
-	end,
-	draw=function(s)
-		s[s.state].draw(s)
-	end,
-}
-
-noop=function()end
-
-tstate=tclass{
-	enter=noop,
-	update=noop,
-	draw=noop,
-	exit=noop,
-}
-
-tevent=tclass{
-	init=function(s)
-		s.ls={}
-	end,
-	add=function(s,f)
-		add(s.ls,f)
-	end,
-	del=function(s,f)
-		del(s.ls,f)
-	end,
-	invoke=function(s,...)
-		for f in all(s.ls) do
-			f(...)
-		end
-	end,
-}
-
--- self func:foreach helper
-sf={}
-setmetatable(sf,{
-	__index=function(t,key)
-		t[key]=function(s)
-			return s[key](s)
-		end
-		return t[key]
-	end
-})
-
-function norm(x,y)
+function normalized(x,y)
 	if x==0 and y==0 then
 		return x,y
 	else
@@ -106,62 +48,74 @@ function norm(x,y)
 	end
 end
 
-function printt(t)
-	local str=t.str
-	local x=t.x
-	local y=t.y
-	local col=t.col
-	if t.align=="center" then
-		x=x-#str*2
-	elseif t.align=="right" then
-		x=x-#str*4
-	end
-	print(str,x,y,col)
-end
 
-function seq(arg)
-	local nidx=1
-	local lcnt=arg.loop or 1
-	return function()
-		if #arg==0 then
-			return nil
-		end
-		if lcnt==0 then
-			return nil
-		end
-		local v=arg[nidx]
-		nidx+=1
-		if nidx>#arg then
-			nidx=1
-			lcnt-=1
-		end
-		return v
-	end
-end
 -->8
--- types
+-- game
 
-tscene=tfsm{}
-tscene[1]=tstate{ -- title
-	update=function(s)
-		if	btnp(5) then
-			s:trans(2)
-		end
+tscene=tclass{
+	init=function(s)
+		title=ttitle:new{}
+		main=tmain:new{}
+		s.state=title
 	end,
+
+	update=function(s)
+		s.state:update()
+	end,
+
 	draw=function(s)
-		cls()
-		print("press ❎ to start")
+		s.state:draw()
 	end,
 }
-tscene[2]=tstate{ -- main
-	enter=function(s)
-		spawn_game()
-		spawn_hud()
+
+ttitle=tclass{
+	init=function(s)
+		s.pressx=tlabel:new{
+			str="press ❎ to start",
+			align="center",
+			x=64,
+			y=32,
+			col=7,
+		}
 	end,
+
+	update=function(s)
+		if btnp(5) then
+			scene.state=main
+		end
+	end,
+
+	draw=function(s)
+		cls()
+		s.pressx:draw()
+	end,
+}
+
+tlabel=tclass{
+	draw=function(s)
+		local str=s.str
+		local x=s.x
+		local y=s.y
+		local col=s.col
+		if s.align=="center" then
+			x=x-#str*2
+		elseif s.align=="right" then
+			x=x-#str*4
+		end
+		print(str,x,y,col)
+	end,
+}
+
+tmain=tclass{
+	init=function(s)
+		hud=thud:new{}
+		game=tgame:new{}
+	end,
+
 	update=function(s)
 		game:update()
-		hud:update()
 	end,
+
 	draw=function(s)
 		cls()
 		game:draw()
@@ -169,136 +123,151 @@ tscene[2]=tstate{ -- main
 	end,
 }
 
-
-thud=tfsm{}
-thud[1]=tstate{ -- main
-	update=function(s)
-		labwave:update()
+thud=tclass{
+	init=function(s)
+		s.wave=tlabel:new{
+			str="wave 0/0",
+			align="right",
+			x=125,
+			y=3,
+			col=5,
+		}
 	end,
-	draw=function(s)
-		labwave:draw()
-	end,
-}
-
-
-tlabel=tfsm{
-	align="left",
-	str="undefined",
-	x=0,
-	y=0,
-	col=0,
-	colseq={},
 	
-	animate_col=function(s)
-		s:trans(2)
-	end
-}
-tlabel[1]=tstate{
-	enter=function(s)
-		s.col=nil
-	end,
 	draw=function(s)
-		printt(s)
+		s.wave:draw()
 	end,
 }
-tlabel[2]=tstate{
-	enter=function(s)
-		s.colseq_f=seq(s.colseq)
+
+tgame=tclass{
+	init=function(s)
+		cannon_cooldown_duration=30
+		invincible_duration=30
+		area=tarea:new{}
+		pship=tpship:new{
+			hp=2,x=64,y=64,
+		}
+		eships={}
+		bullets={}
+		wave=twave:new{}
+		wave:spawn_next()
 	end,
+
 	update=function(s)
-		s.col=s.colseq_f()
-		if s.col==nil then
-			s:trans(1)
+		s:check_bullets()
+		s:check_eships()
+		for b in all(bullets) do
+			b:update()
+		end
+		for e in all(eships) do
+			e:update()
+		end	
+		pship:update()
+	end,
+
+	check_bullets=function(s)
+		for b in all(bullets) do
+			if area:out(b.x,b.y) then
+				del(bullets,b)
+			else
+				for e in all(eships) do
+					if s:overlap(b,e) then
+						e:hit(b.damage)
+						del(bullets,b)
+					end
+				end		
+			end
 		end
 	end,
+
+ check_eships=function(s)
+		local p=pship
+		for e in all(eships) do
+			if s:overlap(p,e) then
+				local dx,dy=normalized(
+					p.x-e.x, p.y-e.y)
+				p:collide(dx,dy)
+				e:collide(-dx,-dy)
+			end
+		end
+	end,
+
+	overlap=function(s,a,b)
+		local ax,ay=a.x,a.y
+		local bx,by=b.x,b.y
+		local ar=a.radius or 0
+		local br=b.radius or 0
+		return
+			abs(ax-bx)<=ar+br and
+			abs(ay-by)<=ar+br
+	end,
+
 	draw=function(s)
-		printt(s)
-	end,
-}
-
-
-tlabwave=tlabel{
-	align="right",
-	str="wave 1/10",
-	x=125,
-	y=3,
-	col=5,
-	colseq={
-		5,5,5,5,
-		10,10,10,10,
-		loop=5,
-	},
-}
-
-
-tgame=tfsm{
-	init=function(s)
-		spawn_area()
-		spawn_pship(64,64)
-		s.on_start_wave=tevent:new()
-		s:start()
-	end,
-	render=function(s)
-		foreach(eships,sf.draw)
-		foreach(bullets,sf.draw)
 		area:draw()
+		for b in all(bullets) do
+			b:draw()
+		end
+		for e in all(eships) do
+			e:draw()
+		end	
 		pship:draw()
 	end,
 }
-tgame[1]=tstate{ -- spawn
-	update=function(s)
-		local wave=waves[wave_num]
-		for arg in all(wave) do
-			spawn_eship(unpack(arg))
+
+twave=tclass{
+	init=function(s)
+		s.num=0
+	end,
+
+	spawn_next=function(s)
+		s.num+=1
+		if s.num<=#wavespecs then
+			local spec=wavespecs[s.num]
+			for arg in all(spec) do
+				s:spawn_eship(unpack(arg))
+			end
+			s:on_wave_start()
+		else	
+			s:on_clear()
 		end
-		s.on_start_wave:invoke()
-		s:trans(2)
 	end,
-	draw=function(s)
-		s:render()
+
+ spawn_eship=function(s,
+ 	teship0,hp,x,y)
+		add(eships,teship0:new{
+			hp=hp,x=x,y=y,
+		})
 	end,
-}
-tgame[2]=tstate{ -- play
-	update=function(s)
-		check_bullets()
-		check_eships()
-		foreach(eships,sf.update)
-		foreach(bullets,sf.update)
-		area:update()
-		pship:update()
+	
+	on_wave_start=function(s)
+		local k=s.num
+		local n=#wavespecs
+		hud.wave.str=
+			"wave "..k.."/"..n
 	end,
-	draw=function(s)
-		s:render()
-	end,
-}
-tgame[3]=tstate{
-	update=function(s)
-	end,
-	draw=function(s)
-		s:render()
+
+	on_clear=function(s)
 	end,
 }
 
-
-tarea=tfsm{
-	col=5,
-	thickness=3,
+tarea=tclass{
 	x0=12,
 	y0=12,
 	x1=112,
 	y1=112,
+	col=5,
+	thickness=3,
 
 	out=function(s,x,y,os)
 		local os=os or 0
 		os+=s.thickness
-		return 
+		return
 			x<s.x0+os or
 			x>s.x1-os or
 			y<s.y0+os or
-			y>s.y1-os 
+			y>s.y1-os
 	end,
-}
-tarea[1]=tstate{
+	
 	draw=function(s)
 		for i=1,s.thickness do
 			if i%2==1 then
@@ -308,48 +277,56 @@ tarea[1]=tstate{
 					s.col)
 			end
 		end
-	end,
+	end
 }
 
-
-tship=tfsm{
-	init_hp=1,
-	rad=2,
-	col=0,
-	spd=0,
+tship=tclass{
+	radius=2,
 	bump=3,
-	
-	init_ship=function(s)
-		s.hp=s.init_hp
-		s.on_hit=tevent:new()
-		s.on_collide=tevent:new()
-		s.on_destroy=tevent:new()
-	end,
-	
+
 	hit=function(s,damage)
 		s.hp-=damage
-		s.justdamaged=true
-		s.on_hit:invoke(s)
+		s:on_hit()
 		if s.hp<=0 then
-			s.on_destroy:invoke(s)
+			s:on_destroy()
 		end
 	end,
 
 	collide=function(s,dx,dy)
 		s.hp-=1
-		s.justdamaged=true
-		s.on_collide:invoke(s)
+		s:on_collide()
 		if s.hp<=0 then
-			s.on_destroy:invoke(s)
+			s:on_destroy()
 		else
 			s:move(dx,dy,s.bump)
 		end
 	end,
 	
+	on_hit=function(s)
+		sfx(sfx_hit)
+	end,
+	
+	on_collide=function(s)
+		if s==pship then
+			sfx(sfx_collide)
+		end
+	end,
+
+	on_destroy=function(s)
+		if s!=pship then
+			del(eships,s)
+			sfx(sfx_destroy)
+			if #eships==0 then
+				wave:spawn_next()
+			end
+		end
+	end,
+
 	move=function(s,dx,dy,spd)
 		local nx=s.x+dx*spd
 		local ny=s.y+dy*spd
-		if area:out(nx,ny,s.rad) then
+		local r=s.radius
+		if area:out(nx,ny,r) then
 			s.x-=dx*s.bump
 			s.y-=dy*s.bump
 			sfx(sfx_bump)
@@ -358,11 +335,11 @@ tship=tfsm{
 		end
 	end,
 
-	render=function(s,col)
+	draw=function(s)
 		local hp=s.hp
 		local x=s.x
 		local y=s.y
-		local r=s.rad
+		local r=s.radius
 		local col=col or s.col	
 		if hp > 2 then
 			circfill(x,y,r,col)
@@ -375,19 +352,21 @@ tship=tfsm{
 	end,
 }
 
-
 tpship=tship{
-	init_hp=2,
 	col=7,
 	spd=1,
 	
 	init=function(s)
-		s:init_ship()
-		s.cannon=tcannon:new()
-		s:start()
+		s.cannon=tcannon:new{}
 	end,
 
-	move_input=function(s)
+	update=function(s)
+		local dx,dy=s:input()
+		s:move(dx,dy,s.spd)
+		s.cannon:update()
+	end,
+
+	input=function(s)
 		local dx=0
 		local dy=0
 		if (btn(0)) dx-=1
@@ -400,30 +379,32 @@ tpship=tship{
 		end
 		return dx,dy
 	end,
-}
-tpship[1]=tstate{ -- alive
-	enter=function(s)
-		s.damaged=false
-	end,
-	update=function(s)
-		local dx,dy=s:move_input()
-		s:move(dx,dy,s.spd)
-		s.cannon:update()
-	end,
+	
 	draw=function(s)
-		s:render()
+		tship.draw(s)
 		s.cannon:draw()
 	end,
 }
 
-
-tcannon=tfsm{
+tcannon=tclass{
 	init=function(s)
 		s.barrels={}
+		s.cooldown=
+			cannon_cooldown_duration
 		s:add_barrel()
-		s:start()
 	end,
 	
+	update=function(s)
+		s:update_rotate()
+		s:update_fire()
+	end,
+	
+	draw=function(s)
+		for b in all(s.barrels) do
+			b:draw()
+		end
+	end,
+
 	add_barrel=function(s)
 		local di=1
 		local n=#s.barrels
@@ -434,12 +415,12 @@ tcannon=tfsm{
 		local b=tbarrel:new{di=di}
 		add(s.barrels,b)
 	end,
-	
+
 	update_rotate=function(s)
 		if(btnp(4)) s:rotate(-1)
 		if(btnp(5)) s:rotate(1)
 	end,
-	
+
 	rotate=function(s,cw)
 		for b in all(s.barrels) do
 			b:rotate(cw)
@@ -447,37 +428,24 @@ tcannon=tfsm{
 	end,
 
 	update_fire=function(s)
-		s.cooldown_t-=1
-		if s.cooldown_t>0 then
+		s.cooldown-=1
+		if s.cooldown>0 then
 			return
 		end
-		s.cooldown_t=cooldown_d
-		foreach(s.barrels,sf.fire)
-	end,
-}
-tcannon[1]=tstate{
-	enter=function(s)
-		s.cooldown_t=cooldown_d
-	end,
-	update=function(s)
-		s:update_rotate()
-		s:update_fire()
-	end,
-	draw=function(s)
-		foreach(s.barrels,sf.draw)
+		s.cooldown=
+			cannon_cooldown_duration
+		for b in all(s.barrels) do
+			b:fire()
+		end
 	end,
 }
 
-
-tbarrel=tfsm{
+tbarrel=tclass{
 	col=7,
 	dirs={
-		{0,-1},
-		{1,0},
-		{0,1},
-		{-1,0},
+		{0,-1},{1,0},{0,1},{-1,0},
 	},
-
+	
 	nextdi=function(s,cw)
 		local n=#s.dirs
 		local ndi=s.di+cw
@@ -504,12 +472,13 @@ tbarrel=tfsm{
 	fire=function(s)
 		local x,y=s:dirpos(4)
 		local dx,dy=s:dir()
-		spawn_bullet(x,y,dx,dy)
+		local b=tbullet:new{
+			x=x,y=y,dx=dx,dy=dy,
+		}
+		add(bullets,b)
 		sfx(sfx_fire)
 	end,
-
-}
-tbarrel[1]=tstate{
+	
 	draw=function(s,di)
 		local x0,y0=s:dirpos(3)
 		local x1,y1=s:dirpos(4)
@@ -518,214 +487,78 @@ tbarrel[1]=tstate{
 	end,
 }
 
-tbullet=tfsm{
-	rad=1,
+tbullet=tclass{
+	radius=1,
 	spd=2,
 	col=7,
 	damage=1,
+
+	update=function(s)
+		s:move(s.dx,s.dy,s.spd)
+	end,
 
 	move=function(s)
 		s.x+=s.dx*s.spd
 		s.y+=s.dy*s.spd
 	end,
 	
-	render=function(s)
+	draw=function(s)
 		local x=s.x
 		local y=s.y
 		local col=s.col
 		pset(x,y,col)
 	end,
 }
-tbullet[1]=tstate{
-	update=function(s)
-		s:move(s.dx,s.dy,s.spd)
-	end,
-	draw=function(s)
-		s:render()
-	end,
-}
 
+teship=tship{}
 
-teship1=tship{
-	init_hp=3,
+teship1=teship{
 	col=8,
 	spd=0.2,
-
-	init=function(s,arg)
-		s:init_ship(arg)
-		s:start()
-	end,
-
-	move_input=function(s)
-		local x=s.x
-		local y=s.y
-		local px=pship.x
-		local py=pship.y
-		return norm(px-x,py-y)
-	end,
-}
-teship1[1]=tstate{
+	
 	update=function(s)
-		local dx,dy=s:move_input()
+		local dx,dy=s:to_pship()
 		s:move(dx,dy,s.spd)
 	end,
-	draw=function(s)
-		s:render()
-	end,
+
+	to_pship=function(s,x,y)
+		local px=pship.x
+		local py=pship.y
+		return normalized(
+			px-s.x,py-s.y)
+	end
 }
 -->8
--- globals
+-- data
 
-function spawn_scene()
-	scene=tscene:new()
-end
+wavespecs={}
 
-function spawn_hud()
-	labwave=tlabwave:new()
-	hud=thud:new()
-	game.on_start_wave:add(function()
-		local k=wave_num
-		local n=#waves
-		labwave.str=
-			"wave "..k.."/"..n
-		labwave:animate_col()
-	end)
-end
-
-function spawn_game()
-	eships={}
-	bullets={}
-	reset_gameparams()
-	game=tgame:new()
-end
-
-function reset_gameparams()
-	wave_num=1
-	cooldown_d=30
-	invincible_d=30
-end
-
-function spawn_area()
-	area=tarea:new()
-end
-
-function spawn_pship(x,y)
-	pship=tpship:new{x=x,y=y}
-	pship.on_hit:add(
-		on_hit_pship)
-	pship.on_collide:add(
-		on_collide_pship)
-end
-
-function spawn_eship(
-		teship,x,y)
-	local e=teship:new{x=x,y=y}
-	e.on_destroy:add(
-		on_destroy_eship)
-	add(eships,e)
-end
-
-function	spawn_bullet(
-		x,y,dx,dy)
-	local b=tbullet:new{
-			x=x,y=y,dx=dx,dy=dy}
-	add(bullets,b)
-end
-
-function on_hit_pship(p)
-	sfx(sfx_hit)
-end
-
-function on_collide_pship(p,e)
-	sfx(sfx_collide)
-end
-	
-function on_destroy_pship(p)
-end
-
-function on_destroy_eship(e)
-	del(eships,e)
-	sfx(sfx_destroy)
-	if #eships==0 then
-		wave_num+=1
-		if wave_num<=#waves then
-			game:trans(1)
-		else
-			game:trans(3) -- end
-		end
-	end
-end
-
-function check_bullets()
-	for b in all(bullets) do
-		if area:out(b.x,b.y) then
-			del(bullets,b)
-		else
-			for e in all(eships) do
-				if overlap(b,e) then
-					e:hit(b.damage)
-					del(bullets,b)
-				end
-			end		
-		end
-	end
-end
-
-function check_eships(s)
-	local p=pship
-	for e in all(eships) do
-		if overlap(p,e) then
-			local dx,dy=norm(
-				p.x-e.x, p.y-e.y)
-			p:collide(dx,dy)
-			e:collide(-dx,-dy)
-		end
-	end
-end
-
-function overlap(a,b)
-	local ax,ay=a.x,a.y
-	local bx,by=b.x,b.y
-	local ar=a.rad or 0
-	local br=b.rad or 0
-	return
-		abs(ax-bx)<=ar+br and
-		abs(ay-by)<=ar+br
-end
--->8
--- constants
-
--- wave
-waves={}
-
-waves[1]={
-	{teship1,20,20},
-	{teship1,100,20},
-	{teship1,20,100},
-	{teship1,100,100},
+wavespecs[1]={
+	{teship1,1,20,20},
+	{teship1,1,100,20},
+	{teship1,1,20,100},
+	{teship1,1,100,100},
 }
 
-waves[2]={
-	{teship1,20,20},
-	{teship1,100,20},
-	{teship1,20,100},
-	{teship1,100,100},
+wavespecs[2]={
+	{teship1,2,20,20},
+	{teship1,2,100,20},
+	{teship1,2,20,100},
+	{teship1,2,100,100},
 }
 
-waves[3]={
-	{teship1,20,20},
-	{teship1,100,20},
-	{teship1,20,100},
-	{teship1,100,100},
+wavespecs[3]={
+	{teship1,3,20,20},
+	{teship1,3,100,20},
+	{teship1,3,20,100},
+	{teship1,3,100,100},
 }
 
--- sfx
 sfx_destroy=0
 sfx_fire=1
 sfx_bump=2
 sfx_hit=3
 sfx_collide=4
-
 __gfx__
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
@@ -737,5 +570,5 @@ __sfx__
 000100003605028050270502c0503205035050360502f0502d0502c0503c0502b0500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 00010000230500000034050370503a0503c0503f0503f050000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 000100003b0503705028050290501f0501c0501a0501905020050270502a0503300035000380003b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-0001000000000340503a05017650236501665018650236502d6503305000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+0001000000000340500f0500f0502365016620110201f0501b1202715000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 0001000000000196501a6301c6301f6401662032650346201e64018650136502464013640176401b6501065013650166503b600186201e600136002360013600286000f6001a6000000000000000000000000000
