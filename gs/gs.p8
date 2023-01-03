@@ -18,7 +18,6 @@ function _draw()
 end
 -->8
 -- core
-
 tclass=(function()
 	local ctor
 	ctor=function(s,o)
@@ -39,6 +38,92 @@ tclass=(function()
 	})
 end)()
 
+tfsm=tclass{
+	entry=nil,
+	states={},
+
+	init=function(s)
+		local ss={}
+		for k,v in pairs(s.states) do
+			ss[k]=v:new()
+		end
+		s.states=ss
+		s.cur=nil
+	end,
+	current=function(s)
+		if (s.cur==nil)	return nil
+		return s.states[s.cur]
+	end,
+
+	start=function(s,o,entry)
+		s.cur=entry or s.entry
+		s.states[s.cur]:enter(s,o)
+	end,
+	trans=function(s,o,to)
+		s.states[s.cur]:exit(s,o)
+		s.cur=to
+		s.states[s.cur]:enter(s,o)
+	end,
+	update=function(s,o)
+		s.states[s.cur]:update(s,o)
+	end,
+	draw=function(s,o)
+		s.states[s.cur]:draw(s,o)
+	end,
+}
+
+tstate=tclass{
+	init=function(s)end,
+	enter=function(s,f,o)end,
+	update=function(s,f,o)end,
+	draw=function(s,f,o)end,
+	exit=function(s,f,o)end,
+}
+
+tanim=tstate{
+	length=0,
+	frames={},
+	wrap="loop",
+	finished=function(s,f,o)
+	end,
+
+	enter=function(s,f,o)
+		local old={}
+		for k,_ in pairs(s.frames) do
+			old[k]=o[k]
+		end
+		s.old=old
+		s.t=1
+	end,
+
+	update=function(s,f,o)
+		for k,v in pairs(s.frames) do
+			local wrap=v.wrap or s.wrap
+			local wf=s[wrap]
+			local i=wf(s.t,#v)
+			o[k]=v[i]
+		end
+		s.t+=1
+		if s.t>s.length then
+			s:finished(f,o)
+		end
+	end,
+	
+	exit=function(s,f,o)
+		for k,v in pairs(s.old) do
+			o[k]=v
+		end
+	end,
+
+	-- wrap functions	
+	loop=function(t,n)
+		return (t-1)%n+1
+	end,
+	hold=function(t,n)
+		return min(t,n)
+	end,
+}
+
 function normalized(x,y)
 	if x==0 and y==0 then
 		return x,y
@@ -53,8 +138,6 @@ function printc(str,x,y,col)
 		x-#str*2,
 		y-3,col)
 end
-	
-
 -->8
 -- game
 
@@ -316,54 +399,36 @@ tlabel_wave=tlabel{
 	col=5,
 
 	init=function(s)
-		s.animval_col=tanimval:new{
-			default=s.col,
-			vals={5,5,5,5,10,10,10,10},
-			loop=5,
-		}
+		s.fsm=tlabel_wave_fsm:new{}
+		s.fsm:start(s)
 	end,
 	
 	update=function(s)
-		s.col=s.animval_col:next()
+		s.fsm:update(s)
 	end,
 	
 	blink=function(s)
-		s.animval_col:play()
+		s.fsm:trans(s,"blinking")
 	end,
 }
 
-tanimval=tclass{
-	default=nil,
-	vals={},
-	loop=1,
-
-	init=function(s)
-		s.next_idx=1
-		s.loop_cnt=0
-	end,
-	
-	play=function(s,loop)
-		s.next_idx=1
-		s.loop_cnt=loop or s.loop
-	end,
-	
-	stop=function(s)
-		s.next_idx=1
-		s.loop_cnt=0
-	end,
-	
-	next=function(s)
-		if s.loop_cnt==0 then
-			return s.default
-		end
-		local v=s.vals[s.next_idx]
-		s.next_idx+=1
-		if s.next_idx>#s.vals then
-			s.next_idx=1
-			s.loop_cnt-=1
-		end
-		return v
-	end,
+tlabel_wave_fsm=tfsm{
+	entry="idle",
+	states={
+		["idle"]=tstate{},
+		["blinking"]=tanim{
+			length=40,
+			frames={
+				col={
+					5,5,5,5,5,
+					10,10,10,10,10,
+				}
+			},
+			finished=function(s,f,o)
+				f:trans(o,"idle")
+			end,
+		}
+	}
 }
 
 tgame=tclass{
