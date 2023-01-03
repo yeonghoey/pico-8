@@ -60,16 +60,14 @@ end
 
 tmain=tclass{
 	init=function(s)
+		money=0
 		hud=thud:new{}
 		game=tgame:new{}
-		powerup=tpowerup:new{}
-		s.state_title=
-			tmain_title:new{}
-		s.state_running=
-			tmain_running:new{}
-		s.state_powerup=
-			tmain_powerup:new{}
-		s.state=s.state_powerup
+		shop=tshop:new{}
+		s.title=ttitle:new{}
+		s.running=trunning:new{}
+		s.shopping=tshopping:new{}
+		s.state=s.title
 	end,
 
 	update=function(s)
@@ -81,7 +79,7 @@ tmain=tclass{
 	end,
 }
 
-tmain_title=tclass{
+ttitle=tclass{
 	init=function(s)
 		s.pressx=tlabel:new{
 			str="press ❎ to start",
@@ -94,8 +92,7 @@ tmain_title=tclass{
 
 	update=function(s)
 		if btnp(5) then
-			main.state=
-				main.state_running
+			main.state=main.running
 		end
 	end,
 
@@ -105,7 +102,7 @@ tmain_title=tclass{
 	end,
 }
 
-tmain_running=tclass{
+trunning=tclass{
 	update=function(s)
 		game:update()
 		hud:update()
@@ -118,14 +115,14 @@ tmain_running=tclass{
 	end,
 }
 
-tmain_powerup=tclass{
+tshopping=tclass{
 	update=function(s)
-		powerup:update()
+		shop:update()
 	end,
 	draw=function(s)
 		game:draw()
 		hud:draw()
-		powerup:draw()
+		shop:draw()
 	end,
 }
 
@@ -144,7 +141,7 @@ tlabel=tclass{
 	end,
 }
 
-tpowerup=tclass{
+tshop=tclass{
 	mar_x=6,
 	pad_x=4,
 	y0=30,
@@ -278,19 +275,36 @@ tpowerup=tclass{
 
 thud=tclass{
 	init=function(s)
+		s.money=tlabel_money:new{}		
 		s.wave=tlabel_wave:new{}
 	end,
 
 	on_wave_start=function(s)
+		local k=wave.num
+		local n=#wavespecs
+		s.wave.str="wave "..k.."/"..n
 		s.wave:blink()
 	end,
 	
 	update=function(s)
+		s.money:update()
 		s.wave:update()
 	end,
 	
 	draw=function(s)
+		s.money:draw()
 		s.wave:draw()
+	end,
+}
+
+tlabel_money=tlabel{
+	str="● 0",
+	align="left",
+	x=3,
+	y=3,
+	col=5,
+	
+	update=function(s)
 	end,
 }
 
@@ -453,10 +467,6 @@ twave=tclass{
 	end,
 	
 	on_wave_start=function(s)
-		local k=s.num
-		local n=#wavespecs
-		hud.wave.str=
-			"wave "..k.."/"..n
 		hud:on_wave_start()
 	end,
 
