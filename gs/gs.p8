@@ -80,23 +80,50 @@ tstate=tclass{
 	exit=function(s,f,o)end,
 }
 
-tanim=tstate{
-	length=0,
+tanim=tclass{
 	frames={},
+	length=nil,
 	wrap="loop",
-	finished=function(s,f,o)
-	end,
 
-	enter=function(s,f,o)
-		local old={}
-		for k,_ in pairs(s.frames) do
-			old[k]=o[k]
-		end
-		s.old=old
+	init=function(s)
+		s.org=nil
 		s.t=1
 	end,
 
-	update=function(s,f,o)
+	play=function(s,o)
+		s:stop(o)
+		s.org={}
+		local maxn=1
+		for k,v in pairs(s.frames) do
+			maxn=max(maxn,#v)
+			s.org[k]=o[k]
+		end
+		s.length=s.length or maxn
+		s.t=1
+	end,
+	
+	stop=function(s,o)
+		if s.org==nil then
+			return
+		end
+		for k,v in pairs(s.org) do
+			o[k]=v
+		end
+		s.org=nil
+	end,
+
+	stopped=function(s)
+		return s.org==nil
+	end,
+
+	update=function(s,o)
+		if s:stopped() then
+			return
+		end
+		if s.t>s.length then
+			s:stop(o)
+			return
+		end
 		for k,v in pairs(s.frames) do
 			local wrap=v.wrap or s.wrap
 			local wf=s[wrap]
@@ -104,15 +131,6 @@ tanim=tstate{
 			o[k]=v[i]
 		end
 		s.t+=1
-		if s.t>s.length then
-			s:finished(f,o)
-		end
-	end,
-	
-	exit=function(s,f,o)
-		for k,v in pairs(s.old) do
-			o[k]=v
-		end
 	end,
 
 	-- wrap functions	
@@ -121,6 +139,37 @@ tanim=tstate{
 	end,
 	hold=function(t,n)
 		return min(t,n)
+	end,
+}
+
+tanimstate=tstate{
+	frames=nil,
+	length=nil,
+	wrap=nil,
+	finished=function(s,f,o)
+	end,
+
+	init=function(s)
+		s.anim=tanim:new{
+			frames=s.frames,
+			length=s.length,
+			wrap=s.wrap,
+		}
+	end,
+
+	enter=function(s,f,o)
+		s.anim:play(o)
+	end,
+
+	update=function(s,f,o)
+		s.anim:update(o)
+		if	s.anim:stopped() then
+			s:finished(f,o)					
+		end
+	end,
+
+	exit=function(s,f,o)
+		s.anim:stop(o)
 	end,
 }
 
@@ -416,10 +465,15 @@ tlabel_wave_fsm=tfsm{
 	entry="idle",
 	states={
 		["idle"]=tstate{},
-		["blinking"]=tanim{
-			length=40,
+		["blinking"]=tanimstate{
 			frames={
 				col={
+					5,5,5,5,5,
+					10,10,10,10,10,
+					5,5,5,5,5,
+					10,10,10,10,10,
+					5,5,5,5,5,
+					10,10,10,10,10,
 					5,5,5,5,5,
 					10,10,10,10,10,
 				}
