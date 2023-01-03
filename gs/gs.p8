@@ -6,15 +6,15 @@ __lua__
 cls()
 
 function _init()
-	scene=tscene:new{}
+	main=tmain:new{}
 end
 
 function _update()
-	scene:update()
+	main:update()
 end
 
 function _draw()
-	scene:draw()
+	main:draw()
 end
 -->8
 -- core
@@ -48,15 +48,28 @@ function normalized(x,y)
 	end
 end
 
+function printc(str,x,y,col)
+	print(str,
+		x-#str*2,
+		y-3,col)
+end
+	
 
 -->8
 -- game
 
-tscene=tclass{
+tmain=tclass{
 	init=function(s)
-		title=ttitle:new{}
-		main=tmain:new{}
-		s.state=title
+		hud=thud:new{}
+		game=tgame:new{}
+		powerup=tpowerup:new{}
+		s.state_title=
+			tmain_title:new{}
+		s.state_running=
+			tmain_running:new{}
+		s.state_powerup=
+			tmain_powerup:new{}
+		s.state=s.state_powerup
 	end,
 
 	update=function(s)
@@ -68,7 +81,7 @@ tscene=tclass{
 	end,
 }
 
-ttitle=tclass{
+tmain_title=tclass{
 	init=function(s)
 		s.pressx=tlabel:new{
 			str="press ❎ to start",
@@ -81,13 +94,38 @@ ttitle=tclass{
 
 	update=function(s)
 		if btnp(5) then
-			scene.state=main
+			main.state=
+				main.state_running
 		end
 	end,
 
 	draw=function(s)
 		cls()
 		s.pressx:draw()
+	end,
+}
+
+tmain_running=tclass{
+	update=function(s)
+		game:update()
+		hud:update()
+	end,
+
+	draw=function(s)
+		cls()
+		game:draw()
+		hud:draw()	
+	end,
+}
+
+tmain_powerup=tclass{
+	update=function(s)
+		powerup:update()
+	end,
+	draw=function(s)
+		game:draw()
+		hud:draw()
+		powerup:draw()
 	end,
 }
 
@@ -106,21 +144,135 @@ tlabel=tclass{
 	end,
 }
 
-tmain=tclass{
-	init=function(s)
-		hud=thud:new{}
-		game=tgame:new{}
-	end,
+tpowerup=tclass{
+	mar_x=6,
+	pad_x=4,
+	y0=30,
+	win_h=48,
+	wincol=5,
+	curcol=10,
 
+	init=function(s)
+		s.win_w=(128
+			-s.mar_x*2
+			-s.pad_x*2)/3
+		s.cur=1
+		s.items={
+			{
+				lines={
+					"bullet","speed",
+				},
+				cost=2,
+			},
+			{
+				lines={
+					"cannon","+1",
+				},
+				cost=3,
+			},
+			{
+				lines={
+					"hp","+1",
+				},
+				cost=1
+			},
+		}
+	end,
+	
 	update=function(s)
-		game:update()
-		hud:update()
+		if btnp(0) then
+			s.cur-=1
+		end
+		if btnp(1) then
+			s.cur+=1
+		end
+		s.cur=mid(1,s.cur,3)
 	end,
 
 	draw=function(s)
-		cls()
-		game:draw()
-		hud:draw()
+		s:draw_slot(1)
+		s:draw_slot(2)
+		s:draw_slot(3)
+		s:draw_cursor()
+		s:draw_guide()
+	end,
+	
+	draw_slot=function(s,num)
+		s:draw_window(num)
+		s:draw_item(num)
+	end,
+	
+	draw_window=function(s,num)
+		rect(
+			s:winarg(num,0,s.wincol))
+		rectfill(
+			s:winarg(num,1,0))
+		rect(
+			s:winarg(num,3,s.wincol))
+	end,
+	
+	draw_item=function(s,num)
+		local item=s.items[num]
+		local x0,y0,x1,y1=
+			s:winarg(num,0)
+		s:draw_item_lines(
+			item.lines,x0,y0,x1,y1)
+		s:draw_item_cost(
+			item.cost,x0,y0,x1,y1)
+	end,
+	
+	draw_item_lines=function(s,
+			lines,x0,y0,x1,y1)
+		local n=#lines
+		local xc=(x0+x1)/2+2
+		local yc=y0+20
+		for i=1,n do
+			local yos=-n*3+(i-1)*6
+			printc(lines[i],
+				xc,yc+yos,s.wincol)
+		end
+	end,
+	
+	draw_item_cost=function(s,
+			cost,x0,y0,x1,y1)
+		local xc=(x0+x1)/2-2
+		local yc=y0+35
+		printc("● "..cost,
+			xc,yc,s.wincol)
+	end,
+
+	draw_cursor=function(s)
+		rect(
+			s:winarg(
+				s.cur,1,s.curcol))
+		rect(
+			s:winarg(
+				s.cur,2,s.curcol))
+	end,
+	
+	draw_guide=function(s)
+		local x0,y0=80,86
+		local x1,y1=x0+42,y0+16
+		rectfill(x0,y0,x1,y1,
+			s.wincol)
+		rectfill(x0+1,y0+1,x1-1,y1-1,
+			0)		
+		print("confirm ❎",
+			x0+2,y0+2,s.wincol)
+		print("skip 🅾️",
+			x0+14,y0+10,s.wincol)
+	end,
+
+	winarg=function(
+			s,num,os,col)
+		local x0=
+			s.mar_x+
+			s.pad_x*(num-1)+
+			s.win_w*(num-1)+os
+		local x1=x0+s.win_w-os*2
+		local y0=s.y0+os
+		local y1=y0+s.win_h-os*2
+		return x0,y0,x1,y1,col
 	end,
 }
 
@@ -143,11 +295,11 @@ thud=tclass{
 }
 
 tlabel_wave=tlabel{
-			str="wave 0/0",
-			align="right",
-			x=125,
-			y=3,
-			col=5,
+	str="wave 0/0",
+	align="right",
+	x=125,
+	y=3,
+	col=5,
 
 	init=function(s)
 		s.animval_col=tanimval:new{
@@ -164,7 +316,7 @@ tlabel_wave=tlabel{
 	blink=function(s)
 		s.animval_col:play()
 	end,
-		}
+}
 
 tanimval=tclass{
 	default=nil,
@@ -365,7 +517,7 @@ tship=tclass{
 	end,
 	
 	on_hit=function(s)
-		sfx(sfx_hit)
+ 		sfx(sfx_hit)
 	end,
 	
 	on_collide=function(s)
